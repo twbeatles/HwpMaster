@@ -59,30 +59,68 @@
 
 ---
 
-## 🎨 UI 구조
+## 🎨 UI 및 프로젝트 구조
 
 ```
-MainWindow (main_window.py)
-├── Sidebar
-│   ├── 🏠 홈          → HomePage (home_page.py)
-│   ├── 🔄 변환        → ConvertPage (convert_page.py)
-│   ├── 📎 병합/분할   → MergeSplitPage (merge_split_page.py)
-│   ├── 📝 데이터 주입 → DataInjectPage (data_inject_page.py)
-│   ├── 🧹 메타정보    → MetadataPage (metadata_page.py)
-│   ├── 📦 템플릿      → TemplatePage (template_page.py)
-│   ├── 🎬 매크로      → MacroPage (macro_page.py)
-│   ├── 🔤 정규식      → RegexPage (regex_page.py)
-│   ├── 👮 Style Cop   → StyleCopPage (style_cop_page.py)
-│   ├── 🩺 Table Doctor→ TableDoctorPage (table_doctor_page.py)
-│   ├── 📊 Doc Diff    → DocDiffPage (doc_diff_page.py)
-│   ├── 📑 Smart TOC   → SmartTocPage (smart_toc_page.py)
-│   ├── 💧 워터마크    → WatermarkPage (watermark_page.py)
-│   ├── 📄 헤더/푸터   → HeaderFooterPage (header_footer_page.py)
-│   ├── 🔖 북마크      → BookmarkPage (bookmark_page.py)
-│   ├── 🔗 링크 검사   → HyperlinkPage (hyperlink_page.py)
-│   ├── 🖼️ 이미지 추출 → ImageExtractorPage (image_extractor_page.py)
-│   └── ⚙️ 설정        → SettingsPage (settings_page.py)
-└── QStackedWidget
+hwp-master/
+├── main.py                    # 프로그램 진입점
+├── requirements.txt           # 의존성 패키지 목록
+├── hwp_master.spec            # PyInstaller 빌드 설정
+├── assets/
+│   └── styles/style.qss       # 다크모드 스타일시트
+├── src/
+│   ├── core/                  # 핵심 비즈니스 로직
+│   │   ├── hwp_handler.py     # HWP 제어 (pyhwpx)
+│   │   ├── excel_handler.py   # Excel 처리 (openpyxl)
+│   │   ├── template_store.py  # 템플릿 관리
+│   │   ├── macro_recorder.py  # 매크로 기록/재생
+│   │   ├── regex_replacer.py  # 정규식 치환
+│   │   ├── style_cop.py       # 서식 교정
+│   │   ├── table_doctor.py    # 표 스타일 수정
+│   │   ├── doc_diff.py        # 문서 비교
+│   │   ├── smart_toc.py       # 목차 생성
+│   │   ├── watermark_manager.py   # 워터마크 관리
+│   │   ├── header_footer_manager.py # 헤더/푸터 관리
+│   │   ├── bookmark_manager.py    # 북마크 관리
+│   │   ├── hyperlink_checker.py   # 링크 검사
+│   │   └── image_extractor.py     # 이미지 추출
+│   ├── ui/                    # 사용자 인터페이스
+│   │   ├── main_window.py     # 메인 윈도우 프레임
+│   │   ├── pages/             # 기능별 페이지
+│   │   │   ├── home_page.py        # 홈 대시보드
+│   │   │   ├── convert_page.py     # 변환
+│   │   │   ├── merge_split_page.py # 병합/분할
+│   │   │   ├── data_inject_page.py # 데이터 주입
+│   │   │   ├── metadata_page.py    # 메타정보
+│   │   │   ├── template_page.py    # 템플릿
+│   │   │   ├── macro_page.py       # 매크로
+│   │   │   ├── regex_page.py       # 정규식
+│   │   │   ├── style_cop_page.py   # 서식 교정
+│   │   │   ├── table_doctor_page.py # 표 교정
+│   │   │   ├── doc_diff_page.py    # 문서 비교
+│   │   │   ├── smart_toc_page.py   # 목차
+│   │   │   ├── watermark_page.py   # 워터마크
+│   │   │   ├── header_footer_page.py # 헤더/푸터
+│   │   │   ├── bookmark_page.py    # 북마크
+│   │   │   ├── hyperlink_page.py   # 링크 검사
+│   │   │   ├── image_extractor_page.py # 이미지 추출
+│   │   │   └── settings_page.py    # 설정
+│   │   └── widgets/           # 공통 위젯
+│   │       ├── file_list.py        # 파일 목록
+│   │       ├── feature_card.py     # 기능 카드
+│   │       ├── progress_card.py    # 진행률 표시
+│   │       ├── sidebar_button.py   # 사이드바 버튼
+│   │       ├── page_header.py      # 페이지 헤더
+│   │       ├── toast.py            # 알림 메시지
+│   │       ├── favorites_panel.py  # 즐겨찾기 패널
+│   │       └── history_panel.py    # 작업 히스토리
+│   └── utils/                 # 유틸리티
+│       ├── worker.py          # 백그라운드 작업 (QThread)
+│       ├── logger.py          # 로깅 시스템
+│       ├── settings.py        # 설정 관리
+│       ├── theme_manager.py   # 테마 관리
+│       └── history_manager.py # 히스토리 관리
+└── tests/                     # 단위 테스트
 ```
 
 ---
