@@ -123,36 +123,30 @@ class HeaderFooterManager:
     """
     
     def __init__(self) -> None:
-        self._hwp = None
-        self._is_initialized = False
+        self._handler = None
         self._logger = logging.getLogger(__name__)
     
-    def _ensure_hwp(self) -> None:
-        """pyhwpx 인스턴스 초기화"""
-        if self._hwp is None:
-            try:
-                import pyhwpx
-                self._hwp = pyhwpx.Hwp(visible=False)
-                self._is_initialized = True
-            except ImportError:
-                raise RuntimeError("pyhwpx가 설치되어 있지 않습니다.")
-            except Exception as e:
-                raise RuntimeError(f"한글 프로그램 초기화 실패: {e}")
+    def _get_hwp(self):
+        """HwpHandler를 통해 HWP 인스턴스 반환"""
+        if self._handler is None:
+            from .hwp_handler import HwpHandler
+            self._handler = HwpHandler()
+            self._handler._ensure_hwp()
+        return self._handler._hwp
     
     def close(self) -> None:
         """한글 인스턴스 종료"""
-        if self._hwp is not None:
+        if self._handler is not None:
             try:
-                self._hwp.quit()
+                self._handler.close()
             except Exception as e:
                 self._logger.warning(f"HWP 종료 중 오류 (무시됨): {e}")
             finally:
-                self._hwp = None
-                self._is_initialized = False
+                self._handler = None
                 gc.collect()
     
     def __enter__(self):
-        self._ensure_hwp()
+        self._get_hwp()
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -295,7 +289,10 @@ class HeaderFooterManager:
                 header_text += "\t" + self._replace_variables(config.header_right, source_path)
             
             if header_text:
-                self._hwp.insert_text(header_text.strip())
+                # pyhwpx 호환 방식으로 텍스트 삽입
+                self._hwp.HAction.GetDefault("InsertText", self._hwp.HParameterSet.HInsertText.HSet)
+                self._hwp.HParameterSet.HInsertText.Text = header_text.strip()
+                self._hwp.HAction.Execute("InsertText", self._hwp.HParameterSet.HInsertText.HSet)
             
             self._hwp.HAction.Run("CloseHeaderFooter")
             
@@ -323,7 +320,10 @@ class HeaderFooterManager:
                 footer_text += "\t" + self._replace_variables(config.footer_right, source_path)
             
             if footer_text:
-                self._hwp.insert_text(footer_text.strip())
+                # pyhwpx 호환 방식으로 텍스트 삽입
+                self._hwp.HAction.GetDefault("InsertText", self._hwp.HParameterSet.HInsertText.HSet)
+                self._hwp.HParameterSet.HInsertText.Text = footer_text.strip()
+                self._hwp.HAction.Execute("InsertText", self._hwp.HParameterSet.HInsertText.HSet)
             
             self._hwp.HAction.Run("CloseHeaderFooter")
             

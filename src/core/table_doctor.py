@@ -144,27 +144,26 @@ class TableDoctor:
                 
                 hwp.open(file_path)
                 
-                # 표 컨트롤 탐색
-                ctrl = hwp.HeadCtrl
+                # pyhwpx 호환 방식: 표 찾기
+                hwp.Run("MoveDocBegin")
                 table_idx = 0
                 
-                while ctrl:
-                    if ctrl.CtrlID == "tbl":  # 표 컨트롤
-                        try:
-                            table_set = ctrl.TableSet
-                            row_count = table_set.RowCnt
-                            col_count = table_set.ColCnt
-                            
-                            tables.append(TableInfo(
-                                index=table_idx,
-                                row_count=row_count,
-                                col_count=col_count
-                            ))
-                            table_idx += 1
-                        except Exception as e:
-                            self._logger.warning(f"표 정보 추출 실패: {e}")
+                while True:
+                    result_found = hwp.Run("TableFind")
                     
-                    ctrl = ctrl.NextCtrl
+                    if not result_found:
+                        break
+                    
+                    # 표 발견, 기본 정보만 저장
+                    tables.append(TableInfo(
+                        index=table_idx,
+                        row_count=0,  # 상세 정보는 표 속성 창에서만 확인 가능
+                        col_count=0
+                    ))
+                    table_idx += 1
+                    
+                    # 다음 위치로 이동
+                    hwp.Run("MoveRight")
                     
         except Exception as e:
             self._logger.error(f"표 스캔 오류: {e}")
@@ -199,57 +198,60 @@ class TableDoctor:
                 
                 hwp.open(file_path)
                 
-                # 표 컨트롤 탐색 및 수정
-                ctrl = hwp.HeadCtrl
+                # pyhwpx 호환 방식: 문서 내 표 찾기
                 table_count = 0
                 fixed_count = 0
                 
-                while ctrl:
-                    if ctrl.CtrlID == "tbl":
-                        table_count += 1
+                # 문서 시작으로 이동
+                hwp.Run("MoveDocBegin")
+                
+                # 표 찾기 및 수정 (반복)
+                while True:
+                    # 다음 표 찾기
+                    result_found = hwp.Run("TableFind")
+                    
+                    if not result_found:
+                        break
+                    
+                    table_count += 1
+                    
+                    if progress_callback:
+                        progress_callback(table_count, table_count, f"표 {table_count}")
+                    
+                    try:
+                        # 표 전체 선택
+                        hwp.Run("TableCellBlockExtend")
+                        hwp.Run("TableCellBlock")
                         
-                        if progress_callback:
-                            progress_callback(table_count, table_count, f"표 {table_count}")
-                        
+                        # 셀 속성 변경 - 테두리 설정
                         try:
-                            # 표 선택
-                            hwp.SetPosBySet(ctrl)
-                            hwp.SelectCtrl()
-                            
-                            # 표 속성 수정
-                            hwp.HAction.GetDefault("TableCellBlock", hwp.HParameterSet.HCellBorderFill.HSet)
-                            
+                            hwp.HAction.GetDefault("CellBorder", hwp.HParameterSet.HCellBorderFill.HSet)
                             cell_border = hwp.HParameterSet.HCellBorderFill
                             
-                            # 테두리 설정
-                            border_width = int(style.border_width * 100)  # 0.01mm 단위
-                            
-                            cell_border.BorderWidthTop = border_width
-                            cell_border.BorderWidthBottom = border_width
+                            # 테두리 너비 설정 (mm → HwpUnit)
+                            border_width = hwp.MiliToHwpUnit(style.border_width)
                             cell_border.BorderWidthLeft = border_width
                             cell_border.BorderWidthRight = border_width
+                            cell_border.BorderWidthTop = border_width
+                            cell_border.BorderWidthBottom = border_width
                             
-                            # 셀 여백 설정
-                            cell_border.CellMarginTop = int(style.cell_padding_top * 100)
-                            cell_border.CellMarginBottom = int(style.cell_padding_bottom * 100)
-                            cell_border.CellMarginLeft = int(style.cell_padding_left * 100)
-                            cell_border.CellMarginRight = int(style.cell_padding_right * 100)
-                            
-                            hwp.HAction.Execute("TableCellBlock", hwp.HParameterSet.HCellBorderFill.HSet)
-                            
+                            hwp.HAction.Execute("CellBorder", cell_border.HSet)
                             fixed_count += 1
-                            
-                        except Exception as e:
-                            self._logger.warning(f"표 {table_count} 수정 실패: {e}")
+                        except Exception as style_e:
+                            self._logger.warning(f"표 {table_count} 스타일 적용 실패: {style_e}")
                         
-                        # 선택 해제
-                        hwp.Cancel()
+                        hwp.Run("Cancel")  # 선택 해제
+                        
+                    except Exception as e:
+                        self._logger.warning(f"표 {table_count} 수정 실패: {e}")
+                        hwp.Run("Cancel")
                     
-                    ctrl = ctrl.NextCtrl
+                    # 다음 위치로 이동
+                    hwp.Run("MoveRight")
                 
-                # 저장
+                # 저장 (pyhwpx 메서드 사용)
                 save_path = output_path if output_path else file_path
-                hwp.SaveAs(save_path)
+                hwp.save_as(save_path)
                 
                 return TableDoctorResult(
                     success=True,

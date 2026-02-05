@@ -10,7 +10,7 @@ import os
 import logging
 from pathlib import Path
 from typing import Optional, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -28,12 +28,8 @@ class ExtractResult:
     """이미지 추출 결과"""
     success: bool
     source_path: str
-    images: list = None
+    images: list[ImageInfo] = field(default_factory=list)
     error_message: Optional[str] = None
-    
-    def __post_init__(self):
-        if self.images is None:
-            self.images = []
 
 
 class ImageExtractor:

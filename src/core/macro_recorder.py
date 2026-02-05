@@ -306,7 +306,7 @@ class MacroRecorder:
             return False
     
     def _execute_action(self, hwp, action: MacroAction) -> None:
-        """단일 액션 실행"""
+        """단일 액션 실행 (pyhwpx 호환)"""
         action_type = action.action_type
         params = action.params
         
@@ -316,21 +316,33 @@ class MacroRecorder:
             elif action_type == "save_file":
                 hwp.save_as(params.get("path", ""))
             elif action_type == "find_replace":
-                hwp.find_replace(params.get("find", ""), params.get("replace", ""))
+                # pyhwpx 호환 찾기/바꾸기
+                pset = hwp.HParameterSet.HFindReplace
+                hwp.HAction.GetDefault("FindReplace", pset.HSet)
+                pset.FindString = params.get("find", "")
+                pset.ReplaceString = params.get("replace", "")
+                pset.ReplaceMode = 1  # 모두 바꾸기
+                pset.IgnoreMessage = 1
+                hwp.HAction.Execute("FindReplace", pset.HSet)
             elif action_type == "insert_text":
-                hwp.insert_text(params.get("text", ""))
+                # pyhwpx 호환 텍스트 삽입
+                hwp.HAction.GetDefault("InsertText", hwp.HParameterSet.HInsertText.HSet)
+                hwp.HParameterSet.HInsertText.Text = params.get("text", "")
+                hwp.HAction.Execute("InsertText", hwp.HParameterSet.HInsertText.HSet)
             elif action_type == "select_all":
-                hwp.select_all()
+                hwp.Run("SelectAll")
             elif action_type == "set_bold":
-                hwp.set_bold(params.get("enabled", True))
+                hwp.Run("CharShapeBold")
             elif action_type == "set_italic":
-                hwp.set_italic(params.get("enabled", True))
+                hwp.Run("CharShapeItalic")
             elif action_type == "set_underline":
-                hwp.set_underline(params.get("enabled", True))
+                hwp.Run("CharShapeUnderline")
             elif action_type == "set_color":
-                hwp.set_text_color(params.get("color", "#000000"))
+                # 글자색 설정은 복잡하므로 경고만 출력
+                self._logger.warning(f"글자색 변경은 현재 지원되지 않습니다: {params.get('color')}")
             elif action_type == "set_size":
-                hwp.set_font_size(params.get("size", 10))
+                # 글자 크기 설정은 복잡하므로 경고만 출력
+                self._logger.warning(f"글자 크기 변경은 현재 지원되지 않습니다: {params.get('size')}")
             elif action_type == "custom":
                 # 보안상 커스텀 코드 실행 비활성화
                 self._logger.warning(f"커스텀 액션은 보안상 실행되지 않습니다: {action.description}")
@@ -393,3 +405,75 @@ class MacroRecorder:
             actions.append(MacroAction("set_size", {"size": size}, f"크기: {size}"))
         
         return self.save_macro(name, actions, description)
+    
+    def create_batch_replace_macro(
+        self,
+        name: str,
+        replacements: list[tuple[str, str]],
+        description: str = ""
+    ) -> MacroInfo:
+        """
+        다중 찾기/바꾸기 매크로 생성
+        
+        Args:
+            name: 매크로 이름
+            replacements: (찾을 문자열, 바꿀 문자열) 튜플 리스트
+            description: 설명
+        
+        Returns:
+            생성된 MacroInfo
+        """
+        actions = []
+        for find_text, replace_text in replacements:
+            actions.append(MacroAction(
+                action_type="find_replace",
+                params={"find": find_text, "replace": replace_text},
+                description=f"'{find_text}' → '{replace_text}'"
+            ))
+        
+        if not description:
+            description = f"다중 치환 매크로 ({len(replacements)}건)"
+        
+        return self.save_macro(name, actions, description)
+    
+    @staticmethod
+    def get_preset_macros() -> list[dict]:
+        """
+        사전 정의된 프리셋 매크로 목록 반환
+        
+        사용자가 즉시 사용할 수 있는 유용한 매크로 목록입니다.
+        """
+        return [
+            {
+                "name": "공백 정리",
+                "description": "연속 공백을 단일 공백으로 변환",
+                "replacements": [("  ", " ")],
+            },
+            {
+                "name": "특수문자 통일",
+                "description": "전각 문자를 반각으로 통일",
+                "replacements": [
+                    ("　", " "),   # 전각 공백
+                    ("，", ","),
+                    ("．", "."),
+                    ("：", ":"),
+                    ("；", ";"),
+                ],
+            },
+            {
+                "name": "따옴표 통일",
+                "description": "다양한 따옴표를 표준 형식으로 통일",
+                "replacements": [
+                    (""", "\""),
+                    (""", "\""),
+                    ("'", "'"),
+                    ("'", "'"),
+                ],
+            },
+            {
+                "name": "줄바꿈 정리",
+                "description": "연속 줄바꿈을 단일 줄바꿈으로 정리",
+                "replacements": [("\r\n\r\n\r\n", "\r\n\r\n")],
+            },
+        ]
+

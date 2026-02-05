@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 from typing import Optional, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 
@@ -40,14 +40,10 @@ class LinkCheckResult:
     """링크 검사 결과"""
     success: bool
     source_path: str
-    links: list = None
+    links: list[LinkInfo] = field(default_factory=list)
     valid_count: int = 0
     broken_count: int = 0
     error_message: Optional[str] = None
-    
-    def __post_init__(self):
-        if self.links is None:
-            self.links = []
 
 
 class HyperlinkChecker:

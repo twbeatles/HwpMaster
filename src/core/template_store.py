@@ -378,3 +378,85 @@ class TemplateStore:
         """모든 카테고리 목록"""
         categories = set(t.category for t in self._templates.values())
         return sorted(categories)
+    
+    def register_builtin_template_file(
+        self,
+        template_id: str,
+        file_path: str
+    ) -> bool:
+        """
+        내장 템플릿에 HWP 파일 등록
+        
+        사용자가 직접 HWP 파일을 선택하여 내장 템플릿에 연결할 수 있습니다.
+        
+        Args:
+            template_id: 내장 템플릿 ID (예: "leave_annual")
+            file_path: HWP 파일 경로
+        
+        Returns:
+            등록 성공 여부
+        """
+        template = self._templates.get(template_id)
+        if not template or not template.is_builtin:
+            self._logger.warning(f"내장 템플릿이 아니거나 존재하지 않는 ID: {template_id}")
+            return False
+        
+        source = Path(file_path)
+        if not source.exists():
+            self._logger.warning(f"파일이 존재하지 않습니다: {file_path}")
+            return False
+        
+        # 파일을 템플릿 디렉토리로 복사
+        dest = self._templates_dir / f"{template_id}{source.suffix}"
+        shutil.copy2(source, dest)
+        
+        # 템플릿 정보 업데이트
+        template.file_path = str(dest)
+        self._save_metadata()
+        
+        self._logger.info(f"내장 템플릿 '{template.name}'에 파일이 등록되었습니다: {dest}")
+        return True
+    
+    def get_unregistered_templates(self) -> list[TemplateInfo]:
+        """
+        파일이 등록되지 않은 내장 템플릿 목록 반환
+        
+        Returns:
+            파일이 없는 내장 템플릿 목록
+        """
+        return [
+            t for t in self._templates.values()
+            if t.is_builtin and not t.file_path
+        ]
+    
+    def get_registered_templates(self) -> list[TemplateInfo]:
+        """
+        파일이 등록된 템플릿 목록 반환 (사용 가능한 템플릿)
+        
+        Returns:
+            파일이 있는 템플릿 목록
+        """
+        return [
+            t for t in self._templates.values()
+            if t.file_path and Path(t.file_path).exists()
+        ]
+    
+    def is_template_ready(self, template_id: str) -> bool:
+        """
+        템플릿이 사용 가능한 상태인지 확인
+        
+        Args:
+            template_id: 템플릿 ID
+        
+        Returns:
+            사용 가능 여부
+        """
+        template = self._templates.get(template_id)
+        if not template:
+            return False
+        
+        if not template.file_path:
+            return False
+        
+        return Path(template.file_path).exists()
+

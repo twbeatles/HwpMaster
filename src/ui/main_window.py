@@ -27,7 +27,7 @@ from .widgets.progress_card import ProgressCard
 from .widgets.sidebar_button import SidebarButton
 from .widgets.feature_card import FeatureCard
 from .widgets.toast import ToastManager, ToastType, get_toast_manager
-from ..utils.worker import ConversionWorker, MergeWorker, DataInjectWorker, MetadataCleanWorker, WorkerResult
+from ..utils.worker import ConversionWorker, MergeWorker, SplitWorker, DataInjectWorker, MetadataCleanWorker, WorkerResult
 from ..utils.settings import get_settings_manager
 
 
@@ -476,10 +476,46 @@ class MainWindow(QMainWindow):
             self._current_worker.finished_with_result.connect(self._on_merge_finished)
             self._current_worker.start()
         else:
-            # 분할은 현재 단일 파일만 지원
-            QMessageBox.information(self, "알림", "분할 기능은 추후 지원 예정입니다.")
-            self.merge_split_page.execute_btn.setEnabled(True)
-            self.merge_split_page.progress_card.setVisible(False)
+            # 분할 모드
+            files = self.merge_split_page.file_list.get_files()
+            if not files:
+                QMessageBox.warning(self, "알림", "분할할 파일을 추가해주세요.")
+                self.merge_split_page.execute_btn.setEnabled(True)
+                self.merge_split_page.progress_card.setVisible(False)
+                return
+            
+            if len(files) > 1:
+                QMessageBox.warning(self, "알림", "분할은 한 번에 하나의 파일만 처리할 수 있습니다.")
+                self.merge_split_page.execute_btn.setEnabled(True)
+                self.merge_split_page.progress_card.setVisible(False)
+                return
+            
+            page_ranges = self.merge_split_page.get_page_ranges()
+            if not page_ranges:
+                QMessageBox.warning(self, "알림", "페이지 범위를 입력해주세요.\n예: 1-3, 4-6")
+                self.merge_split_page.execute_btn.setEnabled(True)
+                self.merge_split_page.progress_card.setVisible(False)
+                return
+            
+            # 출력 디렉토리 선택
+            output_dir = QFileDialog.getExistingDirectory(
+                self, "분할 파일 저장 위치", str(Path.home() / "Documents")
+            )
+            if not output_dir:
+                self.merge_split_page.execute_btn.setEnabled(True)
+                self.merge_split_page.progress_card.setVisible(False)
+                return
+            
+            self.set_busy(True)
+            self._current_worker = SplitWorker(files[0], page_ranges, output_dir)
+            self._current_worker.progress.connect(
+                lambda c, t, n: self.merge_split_page.progress_card.set_count(c, t)
+            )
+            self._current_worker.status_changed.connect(
+                lambda s: self.merge_split_page.progress_card.set_status(s)
+            )
+            self._current_worker.finished_with_result.connect(self._on_split_finished)
+            self._current_worker.start()
     
     @Slot(object)
     def _on_merge_finished(self, result: WorkerResult) -> None:
@@ -493,6 +529,25 @@ class MainWindow(QMainWindow):
         else:
             self.merge_split_page.progress_card.set_error(result.error_message or "오류 발생")
             QMessageBox.warning(self, "오류", result.error_message or "병합 중 오류가 발생했습니다.")
+    
+    @Slot(object)
+    def _on_split_finished(self, result: WorkerResult) -> None:
+        """분할 완료 콜백"""
+        self.set_busy(False)
+        self.merge_split_page.execute_btn.setEnabled(True)
+        
+        if result.success:
+            data = result.data or {}
+            success_count = data.get("success_count", 0)
+            fail_count = data.get("fail_count", 0)
+            self.merge_split_page.progress_card.set_completed(success_count, fail_count)
+            QMessageBox.information(
+                self, "완료",
+                f"파일 분할이 완료되었습니다.\n성공: {success_count}개, 실패: {fail_count}개"
+            )
+        else:
+            self.merge_split_page.progress_card.set_error(result.error_message or "오류 발생")
+            QMessageBox.warning(self, "오류", result.error_message or "분할 중 오류가 발생했습니다.")
     
     @Slot()
     def _select_template(self) -> None:

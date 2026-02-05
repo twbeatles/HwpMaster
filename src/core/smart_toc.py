@@ -145,63 +145,45 @@ class SmartTOC:
                 
                 hwp.open(file_path)
                 
-                # 문단별 스캔
-                ctrl = hwp.HeadCtrl
-                line_number = 0
-                current_page = 1
+                # pyhwpx 호환 방식: 텍스트 직접 추출 후 패턴 분석
+                # 전체 텍스트 추출
+                hwp.Run("SelectAll")
+                full_text = hwp.GetTextFile("TEXT", "")
+                hwp.Run("Cancel")
                 
-                while ctrl:
-                    if ctrl.CtrlID == "secd":
-                        para = ctrl.FirstParaHeadCtrl
-                        while para:
-                            line_number += 1
-                            
-                            if progress_callback:
-                                progress_callback(line_number, line_number * 2, "스캔 중...")
-                            
-                            try:
-                                # 텍스트 추출
-                                text = para.String.strip() if para.String else ""
-                                
-                                if not text or len(text) < self._rules["min_text_length"]:
-                                    para = para.NextParaHeadCtrl
-                                    continue
-                                
-                                if len(text) > self._rules["max_text_length"]:
-                                    para = para.NextParaHeadCtrl
-                                    continue
-                                
-                                # 글자 속성 분석
-                                font_size = 10.0
-                                is_bold = False
-                                
-                                try:
-                                    char_shape = para.CharShape
-                                    if char_shape:
-                                        font_size = char_shape.Height / 100
-                                        is_bold = char_shape.Bold
-                                except Exception as e:
-                                    self._logger.debug(f"글자 속성 분석 실패 (줄 {line_number}): {e}")
-                                
-                                # 제목 수준 결정
-                                level = self._determine_level(text, font_size, is_bold)
-                                
-                                if level > 0:
-                                    entries.append(TocEntry(
-                                        level=level,
-                                        text=text,
-                                        page=current_page,
-                                        line_number=line_number,
-                                        font_size=font_size,
-                                        is_bold=is_bold
-                                    ))
-                                    
-                            except Exception as e:
-                                self._logger.debug(f"목차 항목 처리 중 오류 (줄 {line_number}): {e}")
-                            
-                            para = para.NextParaHeadCtrl
+                if not full_text:
+                    return TocResult(
+                        success=True,
+                        file_path=file_path,
+                        entries=[]
+                    )
+                
+                # 줄별로 분석
+                lines = full_text.split('\n')
+                total_lines = len(lines)
+                
+                for i, line in enumerate(lines):
+                    line = line.strip()
                     
-                    ctrl = ctrl.NextCtrl
+                    if progress_callback and i % 50 == 0:
+                        progress_callback(i, total_lines, "스캔 중...")
+                    
+                    if not line or len(line) < self._rules["min_text_length"]:
+                        continue
+                    
+                    if len(line) > self._rules["max_text_length"]:
+                        continue
+                    
+                    # 패턴 기반 제목 수준 결정
+                    level = self._determine_level(line, 12.0, False)  # 글자 크기 정보 없이 패턴만 사용
+                    
+                    if level > 0:
+                        entries.append(TocEntry(
+                            level=level,
+                            text=line,
+                            line_number=i + 1,
+                            page=0  # 페이지 정보는 별도 분석 필요
+                        ))
                 
                 return TocResult(
                     success=True,
@@ -326,25 +308,25 @@ class SmartTOC:
                 hwp.open(source_path)
                 
                 if insert_at_beginning:
-                    # 문서 시작으로 이동
-                    hwp.MovePos(2)  # 문서 처음
+                    # 문서 시작으로 이동 (pyhwpx 액션)
+                    hwp.Run("MoveDocBegin")
                     
-                    # 목차 제목 삽입
+                    # 목차 제목 삽입 (pyhwpx 호환 방식)
                     hwp.HAction.GetDefault("InsertText", hwp.HParameterSet.HInsertText.HSet)
                     hwp.HParameterSet.HInsertText.Text = "목     차\r\n\r\n"
                     hwp.HAction.Execute("InsertText", hwp.HParameterSet.HInsertText.HSet)
                     
-                    # 목차 항목 삽입
+                    # 목차 항목 삽입 (pyhwpx 호환 방식)
                     for entry in result.entries:
                         toc_line = entry.format(include_page=False) + "\r\n"
                         hwp.HAction.GetDefault("InsertText", hwp.HParameterSet.HInsertText.HSet)
                         hwp.HParameterSet.HInsertText.Text = toc_line
                         hwp.HAction.Execute("InsertText", hwp.HParameterSet.HInsertText.HSet)
                     
-                    # 페이지 나누기
-                    hwp.HAction.Run("BreakPage")
+                    # 페이지 나누기 (pyhwpx 액션)
+                    hwp.Run("BreakPage")
                 
-                hwp.SaveAs(output_path)
+                hwp.save_as(output_path)
                 return True
                 
         except Exception as e:

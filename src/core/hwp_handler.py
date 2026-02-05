@@ -243,12 +243,14 @@ class HwpHandler:
                 if progress_callback:
                     progress_callback(idx, total, Path(file_path).name)
                 
-                # 문서 끝으로 이동
-                self._hwp.move_to_end()
-                # 페이지 나누기 삽입
-                self._hwp.insert_page_break()
-                # 파일 삽입
-                self._hwp.insert_file(file_path)
+                # 문서 끝으로 이동 (pyhwpx Run 액션 사용)
+                self._hwp.Run("MoveDocEnd")
+                # 페이지 나누기 삽입 (pyhwpx Run 액션 사용)
+                self._hwp.Run("BreakPage")
+                # 파일 삽입 (InsertFile 액션 사용)
+                self._hwp.Run("InsertFile")
+                self._hwp.HParameterSet.HInsertFile.filename = file_path
+                self._hwp.HAction.Execute("InsertFile", self._hwp.HParameterSet.HInsertFile.HSet)
             
             # 저장
             self._hwp.save_as(output_path)
@@ -348,42 +350,63 @@ class HwpHandler:
                 if progress_callback:
                     progress_callback(idx, total, f"분할 {idx}/{total}")
                 
-                # 원본 다시 열기
-                self._hwp.open(source_path)
-                
-                # 전체 페이지 수 확인
-                total_pages = self._hwp.get_page_count()
-                
-                # 페이지 범위 파싱
-                pages = self.parse_page_range(range_str, total_pages)
-                
-                if not pages:
+                try:
+                    # 원본 다시 열기
+                    self._hwp.open(source_path)
+                    
+                    # 전체 페이지 수 확인 (pyhwpx 속성 사용)
+                    total_pages = self._hwp.PageCount
+                    
+                    # 페이지 범위 파싱
+                    pages = self.parse_page_range(range_str, total_pages)
+                    
+                    if not pages:
+                        results.append(ConversionResult(
+                            success=False,
+                            source_path=source_path,
+                            error_message=f"유효하지 않은 페이지 범위: {range_str}"
+                        ))
+                        continue
+                    
+                    # 출력 파일명
+                    output_name = f"{source.stem}_p{pages[0]}-{pages[-1]}.hwp"
+                    output_path = str(output_directory / output_name)
+                    
+                    # 페이지 추출: 원하는 페이지만 남기고 저장
+                    # pyhwpx에서 페이지 삭제를 위해 역순으로 불필요한 페이지 삭제
+                    all_pages = set(range(1, total_pages + 1))
+                    pages_to_delete = sorted(all_pages - set(pages), reverse=True)
+                    
+                    for page in pages_to_delete:
+                        # 해당 페이지로 이동 후 페이지 전체 선택하여 삭제
+                        try:
+                            # 페이지 이동 (pyhwpx Run 액션 사용)
+                            self._hwp.Run("MoveDocBegin")
+                            for _ in range(page - 1):
+                                self._hwp.Run("MovePageDown")
+                            # 페이지 범위 선택 및 삭제
+                            self._hwp.Run("MovePageBegin")
+                            self._hwp.Run("MoveSelPageDown")
+                            self._hwp.Run("Delete")
+                        except Exception as del_e:
+                            self._logger.warning(f"페이지 {page} 삭제 중 오류 (무시됨): {del_e}")
+                            self._hwp.Run("Cancel")  # 선택 해제
+                    
+                    # 저장
+                    self._hwp.save_as(output_path)
+                    
+                    results.append(ConversionResult(
+                        success=True,
+                        source_path=source_path,
+                        output_path=output_path
+                    ))
+                    
+                except Exception as inner_e:
                     results.append(ConversionResult(
                         success=False,
                         source_path=source_path,
-                        error_message=f"유효하지 않은 페이지 범위: {range_str}"
+                        error_message=str(inner_e)
                     ))
-                    continue
-                
-                # 출력 파일명
-                output_name = f"{source.stem}_p{pages[0]}-{pages[-1]}.hwp"
-                output_path = str(output_directory / output_name)
-                
-                # 페이지 추출 (역순으로 삭제)
-                all_pages = set(range(1, total_pages + 1))
-                pages_to_delete = sorted(all_pages - set(pages), reverse=True)
-                
-                for page in pages_to_delete:
-                    self._hwp.delete_page(page)
-                
-                # 저장
-                self._hwp.save_as(output_path)
-                
-                results.append(ConversionResult(
-                    success=True,
-                    source_path=source_path,
-                    output_path=output_path
-                ))
                 
         except Exception as e:
             # 실패한 범위에 대해 에러 결과 추가

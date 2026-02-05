@@ -362,6 +362,76 @@ class MetadataCleanWorker(BaseWorker):
                 error_message=str(e)
             ))
 
+
+class SplitWorker(BaseWorker):
+    """분할 작업자"""
+    
+    def __init__(
+        self,
+        file_path: str,
+        page_ranges: list[str],
+        output_dir: str,
+        parent=None
+    ) -> None:
+        super().__init__(parent)
+        
+        self._file_path = file_path
+        self._page_ranges = page_ranges
+        self._output_dir = output_dir
+    
+    def run(self) -> None:
+        """분할 실행"""
+        from ..core.hwp_handler import HwpHandler
+        
+        self.state = WorkerState.RUNNING
+        self.status_changed.emit("분할 준비 중...")
+        
+        success_count = 0
+        fail_count = 0
+        
+        try:
+            with HwpHandler() as handler:
+                def progress_cb(current: int, total: int, name: str) -> None:
+                    if self.is_cancelled():
+                        raise InterruptedError("작업이 취소되었습니다.")
+                    self.progress.emit(current, total, name)
+                    self.status_changed.emit(f"분할 중: {current}/{total}")
+                
+                results = handler.split_file(
+                    self._file_path,
+                    self._page_ranges,
+                    self._output_dir,
+                    progress_callback=progress_cb
+                )
+                
+                for r in results:
+                    if r.success:
+                        success_count += 1
+                    else:
+                        fail_count += 1
+            
+            self.state = WorkerState.FINISHED
+            self.finished_with_result.emit(WorkerResult(
+                success=fail_count == 0,
+                data={
+                    "success_count": success_count,
+                    "fail_count": fail_count
+                }
+            ))
+            
+        except InterruptedError as e:
+            self.state = WorkerState.CANCELLED
+            self.status_changed.emit(str(e))
+            
+        except Exception as e:
+            self.state = WorkerState.ERROR
+            self.error_occurred.emit(str(e))
+            self.finished_with_result.emit(WorkerResult(
+                success=False,
+                error_message=str(e)
+            ))
+
+
 class ImageExtractWorker(BaseWorker):
     """이미지 추출 작업자"""
     

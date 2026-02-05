@@ -235,10 +235,10 @@ class DocDiff:
                 
                 hwp.open(file_path)
                 
-                # 전체 텍스트 추출
-                hwp.SelectAll()
-                text = hwp.GetSelectedText()
-                hwp.Cancel()
+                # 전체 텍스트 추출 (pyhwpx Run 액션 사용)
+                hwp.Run("SelectAll")
+                text = hwp.GetTextFile("TEXT", "")
+                hwp.Run("Cancel")
                 
                 if text:
                     lines = text.split('\n')
@@ -248,7 +248,7 @@ class DocDiff:
                     with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as tmp:
                         tmp_path = tmp.name
                     
-                    hwp.SaveAs(tmp_path, "TEXT")
+                    hwp.save_as(tmp_path, format="TEXT")
                     
                     with open(tmp_path, 'r', encoding='utf-8', errors='ignore') as f:
                         lines = f.read().split('\n')

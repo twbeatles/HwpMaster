@@ -107,32 +107,31 @@ class WatermarkManager:
     """
     
     def __init__(self) -> None:
-        self._hwp = None
-        self._is_initialized = False
+        self._handler: Optional["HwpHandler"] = None
         self._logger = logging.getLogger(__name__)
     
-    def _ensure_hwp(self) -> None:
-        """pyhwpx 인스턴스 초기화"""
-        if self._hwp is None:
-            try:
-                import pyhwpx
-                self._hwp = pyhwpx.Hwp(visible=False)
-                self._is_initialized = True
-            except ImportError:
-                raise RuntimeError("pyhwpx가 설치되어 있지 않습니다.")
-            except Exception as e:
-                raise RuntimeError(f"한글 프로그램 초기화 실패: {e}")
+    def _ensure_hwp(self) -> "HwpHandler":
+        """HwpHandler 인스턴스 초기화 및 반환"""
+        if self._handler is None:
+            from .hwp_handler import HwpHandler
+            self._handler = HwpHandler()
+            self._handler._ensure_hwp()
+        return self._handler
+    
+    def _get_hwp(self):
+        """내부 hwp 객체 반환"""
+        handler = self._ensure_hwp()
+        return handler._hwp
     
     def close(self) -> None:
-        """한글 인스턴스 종료"""
-        if self._hwp is not None:
+        """핸들러 종료"""
+        if self._handler is not None:
             try:
-                self._hwp.quit()
+                self._handler.close()
             except Exception as e:
                 self._logger.warning(f"HWP 종료 중 오류 (무시됨): {e}")
             finally:
-                self._hwp = None
-                self._is_initialized = False
+                self._handler = None
                 gc.collect()
     
     def __enter__(self):
@@ -166,7 +165,7 @@ class WatermarkManager:
             워터마크 적용 결과
         """
         try:
-            self._ensure_hwp()
+            hwp = self._get_hwp()
             
             source = Path(source_path)
             if not source.exists():
@@ -177,7 +176,7 @@ class WatermarkManager:
                 )
             
             # 파일 열기
-            self._hwp.open(source_path)
+            hwp.open(source_path)
             
             # 워터마크 삽입
             if config.watermark_type == WatermarkType.TEXT:
@@ -187,7 +186,7 @@ class WatermarkManager:
             
             # 저장
             save_path = output_path if output_path else source_path
-            self._hwp.save_as(save_path)
+            hwp.save_as(save_path)
             
             return WatermarkResult(
                 success=True,
@@ -204,6 +203,7 @@ class WatermarkManager:
     
     def _insert_text_watermark(self, config: WatermarkConfig) -> None:
         """텍스트 워터마크 삽입"""
+        hwp = self._get_hwp()
         try:
             # 머리말 영역에 텍스트 박스로 워터마크 삽입
             # pyhwpx API를 사용하여 워터마크 효과 구현
@@ -211,13 +211,13 @@ class WatermarkManager:
             # 워터마크 텍스트 설정
             watermark_text = config.text
             
-            # 글자 겹침 방식으로 워터마크 삽입 (배경으로)
+            # 글자 격침 방식으로 워터마크 삽입 (배경으로)
             # HAction을 통해 워터마크 삽입
-            self._hwp.HAction.Run("InsertWatermark")
+            hwp.HAction.Run("InsertWatermark")
             
             # 워터마크 속성 설정
-            pset = self._hwp.HParameterSet.HWatermarkType
-            self._hwp.HAction.GetDefault("InsertWatermark", pset.HSet)
+            pset = hwp.HParameterSet.HWatermarkType
+            hwp.HAction.GetDefault("InsertWatermark", pset.HSet)
             
             pset.Type = 0  # 텍스트
             pset.Text = watermark_text
@@ -226,7 +226,7 @@ class WatermarkManager:
             pset.Angle = config.rotation
             pset.Transparency = 100 - config.opacity
             
-            self._hwp.HAction.Execute("InsertWatermark", pset.HSet)
+            hwp.HAction.Execute("InsertWatermark", pset.HSet)
             
         except Exception as e:
             self._logger.warning(f"워터마크 삽입 대체 방법 시도: {e}")
@@ -235,24 +235,25 @@ class WatermarkManager:
     
     def _insert_watermark_fallback(self, config: WatermarkConfig) -> None:
         """워터마크 삽입 대체 방법"""
+        hwp = self._get_hwp()
         try:
             # 모든 페이지에 적용되도록 머리말 영역 사용
-            self._hwp.HAction.Run("HeaderFooterMode")
+            hwp.HAction.Run("HeaderFooterMode")
             
             # 텍스트 박스 삽입
-            pset = self._hwp.HParameterSet.HShapeObject
-            self._hwp.HAction.GetDefault("DrawTextBox", pset.HSet)
+            pset = hwp.HParameterSet.HShapeObject
+            hwp.HAction.GetDefault("DrawTextBox", pset.HSet)
             
             # 텍스트 박스 위치 및 크기 설정 (중앙 대각선)
-            pset.Width = self._hwp.MiliToHwpUnit(200)
-            pset.Height = self._hwp.MiliToHwpUnit(100)
+            pset.Width = hwp.MiliToHwpUnit(200)
+            pset.Height = hwp.MiliToHwpUnit(100)
             pset.TextWrap = 2  # 글자 앞으로
             pset.TreatAsChar = 0
             
-            self._hwp.HAction.Execute("DrawTextBox", pset.HSet)
+            hwp.HAction.Execute("DrawTextBox", pset.HSet)
             
             # 텍스트 입력
-            self._hwp.HAction.Run("Cancel")
+            hwp.HAction.Run("Cancel")
             
         except Exception as e:
             self._logger.error(f"워터마크 삽입 실패: {e}")
@@ -262,17 +263,18 @@ class WatermarkManager:
         if not config.image_path or not os.path.exists(config.image_path):
             raise ValueError("이미지 경로가 유효하지 않습니다.")
         
+        hwp = self._get_hwp()
         try:
-            self._hwp.HAction.Run("InsertWatermark")
+            hwp.HAction.Run("InsertWatermark")
             
-            pset = self._hwp.HParameterSet.HWatermarkType
-            self._hwp.HAction.GetDefault("InsertWatermark", pset.HSet)
+            pset = hwp.HParameterSet.HWatermarkType
+            hwp.HAction.GetDefault("InsertWatermark", pset.HSet)
             
             pset.Type = 1  # 이미지
             pset.ImagePath = config.image_path
             pset.Transparency = 100 - config.opacity
             
-            self._hwp.HAction.Execute("InsertWatermark", pset.HSet)
+            hwp.HAction.Execute("InsertWatermark", pset.HSet)
             
         except Exception as e:
             self._logger.error(f"이미지 워터마크 삽입 실패: {e}")
@@ -345,19 +347,19 @@ class WatermarkManager:
             결과
         """
         try:
-            self._ensure_hwp()
+            hwp = self._get_hwp()
             
-            self._hwp.open(source_path)
+            hwp.open(source_path)
             
             # 워터마크 제거
             try:
-                self._hwp.HAction.Run("DeleteWatermark")
+                hwp.HAction.Run("DeleteWatermark")
             except Exception:
                 # 워터마크가 없는 경우 무시하지만 로그는 남김
                 self._logger.debug("삭제할 워터마크가 없음")
             
             save_path = output_path if output_path else source_path
-            self._hwp.save_as(save_path)
+            hwp.save_as(save_path)
             
             return WatermarkResult(
                 success=True,

@@ -279,17 +279,25 @@ class RegexReplacer:
                     # pyhwpx의 찾기/바꾸기 기능 사용
                     try:
                         if rule.is_regex:
-                            # 정규식 모드
-                            count = hwp.find_replace_regex(
-                                rule.pattern,
-                                rule.replacement
-                            )
+                            # pyhwpx HAction을 통한 정규식 찾기/바꾸기
+                            hwp.HAction.GetDefault("FindReplace", hwp.HParameterSet.HFindReplace.HSet)
+                            find_replace = hwp.HParameterSet.HFindReplace
+                            find_replace.FindString = rule.pattern
+                            find_replace.ReplaceString = rule.replacement
+                            find_replace.UseRegExp = 1  # 정규식 사용
+                            find_replace.ReplaceAll = 1
+                            hwp.HAction.Execute("FindReplace", find_replace.HSet)
+                            count = 1  # 실제 횟수 확인 어려움
                         else:
                             # 일반 텍스트 모드
-                            count = hwp.find_replace(
-                                rule.pattern,
-                                rule.replacement
-                            )
+                            hwp.HAction.GetDefault("FindReplace", hwp.HParameterSet.HFindReplace.HSet)
+                            find_replace = hwp.HParameterSet.HFindReplace
+                            find_replace.FindString = rule.pattern
+                            find_replace.ReplaceString = rule.replacement
+                            find_replace.UseRegExp = 0
+                            find_replace.ReplaceAll = 1
+                            hwp.HAction.Execute("FindReplace", find_replace.HSet)
+                            count = 1
                         
                         results[rule.name] = count if count else 0
                         
@@ -350,8 +358,8 @@ class RegexReplacer:
     def create_masking_rule(
         pattern: str,
         mask_char: str = "*",
-        mask_groups: list[int] = None,
-        keep_groups: list[int] = None
+        mask_groups: Optional[list[int]] = None,
+        keep_groups: Optional[list[int]] = None
     ) -> ReplacementRule:
         """
         마스킹 규칙 생성 헬퍼

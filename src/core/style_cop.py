@@ -228,8 +228,8 @@ class StyleCop:
                 
                 hwp.open(file_path)
                 
-                # 전체 선택
-                hwp.SelectAll()
+                # 전체 선택 (pyhwpx 액션 사용)
+                hwp.Run("SelectAll")
                 
                 # 문자 서식 설정
                 hwp.HAction.GetDefault("CharShape", hwp.HParameterSet.HCharShape.HSet)
@@ -253,12 +253,12 @@ class StyleCop:
                 
                 hwp.HAction.Execute("ParaShape", hwp.HParameterSet.HParaShape.HSet)
                 
-                # 선택 해제
-                hwp.Cancel()
+                # 선택 해제 (pyhwpx 액션 사용)
+                hwp.Run("Cancel")
                 
-                # 저장
+                # 저장 (pyhwpx 메서드 사용)
                 save_path = output_path if output_path else file_path
-                hwp.SaveAs(save_path)
+                hwp.save_as(save_path)
                 
                 return StyleApplyResult(
                     success=True,
