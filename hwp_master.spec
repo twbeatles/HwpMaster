@@ -41,7 +41,7 @@ excludes = [
 
 a = Analysis(
     ['main.py'],
-    pathex=[str(ROOT)],
+    pathex=[str(ROOT), str(ROOT / 'src')],  # src 경로 명시적 추가
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
@@ -71,10 +71,11 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,  # GUI 앱이므로 콘솔 숨김
+    console=False,
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,  # str(ROOT / 'assets' / 'icons' / 'app.ico') 로 아이콘 지정 가능
+    icon=None,
+    uac_admin=True,  # HWP 제어를 위한 관리자 권한 요청
 )
