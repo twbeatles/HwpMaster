@@ -37,6 +37,9 @@ excludes = [
     'scipy',
     'PIL',
     'tkinter',
+    'PyQt5',
+    'PyQt6',
+    'PySide2',
 ]
 
 a = Analysis(
