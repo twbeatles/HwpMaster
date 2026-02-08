@@ -46,11 +46,11 @@ class MacroAction:
     description: str = ""
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: dict) -> "MacroAction":
+    def from_dict(cls, data: dict[str, Any]) -> "MacroAction":
         return cls(**data)
     
     def to_python_code(self) -> str:
@@ -93,13 +93,13 @@ class MacroInfo:
     modified_at: str = field(default_factory=lambda: datetime.now().isoformat())
     run_count: int = 0
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["actions"] = [a.to_dict() for a in self.actions]
         return data
     
     @classmethod
-    def from_dict(cls, data: dict) -> "MacroInfo":
+    def from_dict(cls, data: dict[str, Any]) -> "MacroInfo":
         actions = [MacroAction.from_dict(a) for a in data.pop("actions", [])]
         return cls(actions=actions, **data)
     
@@ -200,7 +200,7 @@ class MacroRecorder:
     def record_action(
         self,
         action_type: str,
-        params: Optional[dict] = None,
+        params: Optional[dict[str, Any]] = None,
         description: str = ""
     ) -> None:
         """액션 기록"""
@@ -437,7 +437,7 @@ class MacroRecorder:
         return self.save_macro(name, actions, description)
     
     @staticmethod
-    def get_preset_macros() -> list[dict]:
+    def get_preset_macros() -> list[dict[str, Any]]:
         """
         사전 정의된 프리셋 매크로 목록 반환
         

@@ -8,7 +8,7 @@ Author: HWP Master
 import gc
 import logging
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 from dataclasses import dataclass, field
 
 
@@ -34,7 +34,7 @@ class BookmarkManager:
     """북마크 관리자"""
     
     def __init__(self) -> None:
-        self._hwp = None
+        self._hwp: Any = None
         self._is_initialized = False
         self._logger = logging.getLogger(__name__)
     
@@ -48,6 +48,13 @@ class BookmarkManager:
                 raise RuntimeError("pyhwpx가 설치되어 있지 않습니다.")
             except Exception as e:
                 raise RuntimeError(f"한글 프로그램 초기화 실패: {e}")
+
+    def _get_hwp(self) -> Any:
+        """초기화된 HWP 인스턴스 반환"""
+        self._ensure_hwp()
+        if self._hwp is None:
+            raise RuntimeError("한글 인스턴스 초기화 실패")
+        return self._hwp
     
     def close(self) -> None:
         if self._hwp is not None:
@@ -71,21 +78,21 @@ class BookmarkManager:
     def get_bookmarks(self, source_path: str) -> BookmarkResult:
         """문서 내 모든 북마크 추출 (pyhwpx 호환)"""
         try:
-            self._ensure_hwp()
+            hwp = self._get_hwp()
             source = Path(source_path)
             if not source.exists():
                 return BookmarkResult(False, source_path, error_message="파일 없음")
             
-            self._hwp.open(source_path)
+            hwp.open(source_path)
             bookmarks: list[BookmarkInfo] = []
             
             try:
                 # pyhwpx 호환: 컨트롤 순회 방식으로 북마크 탐색
-                ctrl = self._hwp.HeadCtrl
+                ctrl: Any = hwp.HeadCtrl
                 while ctrl:
                     try:
                         if ctrl.UserDesc == "책갈피":
-                            bm_name = ctrl.GetSetItem(0)  # 북마크 이름
+                            bm_name = str(ctrl.GetSetItem(0))  # 북마크 이름
                             bookmarks.append(BookmarkInfo(name=bm_name, page=0, position=0))
                     except Exception:
                         pass
@@ -101,16 +108,16 @@ class BookmarkManager:
     def delete_bookmark(self, source_path: str, bookmark_name: str, output_path: Optional[str] = None) -> BookmarkResult:
         """특정 북마크 삭제 (pyhwpx 호환)"""
         try:
-            self._ensure_hwp()
-            self._hwp.open(source_path)
+            hwp = self._get_hwp()
+            hwp.open(source_path)
             
             # pyhwpx 호환: 컨트롤 순회하여 해당 북마크 삭제
             try:
-                ctrl = self._hwp.HeadCtrl
+                ctrl: Any = hwp.HeadCtrl
                 while ctrl:
                     try:
                         if ctrl.UserDesc == "책갈피":
-                            bm_name = ctrl.GetSetItem(0)
+                            bm_name = str(ctrl.GetSetItem(0))
                             if bm_name == bookmark_name:
                                 ctrl.Delete()
                                 break
@@ -121,7 +128,7 @@ class BookmarkManager:
                 self._logger.warning(f"북마크 삭제 중 오류: {e}")
             
             save_path = output_path or source_path
-            self._hwp.save_as(save_path)
+            hwp.save_as(save_path)
             return BookmarkResult(True, source_path)
         except Exception as e:
             return BookmarkResult(False, source_path, error_message=str(e))
@@ -129,16 +136,21 @@ class BookmarkManager:
     def delete_all_bookmarks(self, source_path: str, output_path: Optional[str] = None) -> BookmarkResult:
         """모든 북마크 삭제"""
         try:
-            self._ensure_hwp()
-            self._hwp.open(source_path)
-            result = self.get_bookmarks(source_path)
-            for bookmark in result.bookmarks:
+            hwp = self._get_hwp()
+            hwp.open(source_path)
+
+            ctrl: Any = hwp.HeadCtrl
+            while ctrl:
+                next_ctrl = ctrl.Next
                 try:
-                    self._hwp.delete_bookmark(bookmark.name)
+                    if ctrl.UserDesc == "책갈피":
+                        ctrl.Delete()
                 except Exception as e:
-                    self._logger.warning(f"북마크 '{bookmark.name}' 삭제 실패: {e}")
+                    self._logger.warning(f"북마크 삭제 실패: {e}")
+                ctrl = next_ctrl
+
             save_path = output_path or source_path
-            self._hwp.save_as(save_path)
+            hwp.save_as(save_path)
             return BookmarkResult(True, source_path)
         except Exception as e:
             return BookmarkResult(False, source_path, error_message=str(e))
@@ -153,6 +165,8 @@ class BookmarkManager:
             from openpyxl import Workbook
             wb = Workbook()
             ws = wb.active
+            if ws is None:
+                return BookmarkResult(False, source_path, error_message="Excel 시트 생성 실패")
             ws.title = "북마크 목록"
             ws.append(["번호", "북마크 이름", "페이지"])
             for idx, bm in enumerate(result.bookmarks, 1):

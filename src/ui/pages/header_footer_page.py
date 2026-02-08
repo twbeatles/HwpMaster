@@ -5,7 +5,7 @@ Header/Footer Page
 Author: HWP Master
 """
 
-from typing import Optional
+from typing import Any, Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QLineEdit, QComboBox, QGroupBox,
@@ -58,6 +58,7 @@ class HeaderFooterPage(QWidget):
     
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self.worker: Any = None
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -220,7 +221,7 @@ class HeaderFooterPage(QWidget):
             get_toast_manager().warning("파일을 추가해주세요.")
             return
             
-        from ..utils.worker import HeaderFooterWorker
+        from ...utils.worker import HeaderFooterWorker
         # 제거 시에는 config 불필요, mode="remove"
         
         # 저장 폴더 선택 (덮어쓰기 방지용, 선택 안하면 덮어쓰기?)
@@ -257,7 +258,7 @@ class HeaderFooterPage(QWidget):
             return
             
         # 설정 수집
-        from ..core.header_footer_manager import HeaderFooterConfig, PageNumberFormat, HeaderFooterPosition
+        from ...core.header_footer_manager import HeaderFooterConfig, PageNumberFormat, HeaderFooterPosition
         
         config = HeaderFooterConfig()
         
@@ -312,11 +313,13 @@ class HeaderFooterPage(QWidget):
             if not output_dir:
                 return
 
-        from ..utils.worker import HeaderFooterWorker
+        from ...utils.worker import HeaderFooterWorker
         self.worker = HeaderFooterWorker("apply", files, config, output_dir)
         self._run_worker()
 
     def _run_worker(self):
+        if self.worker is None:
+            return
         self.worker.progress.connect(self._on_progress)
         self.worker.finished_with_result.connect(self._on_finished)
         self.worker.error_occurred.connect(self._on_error)

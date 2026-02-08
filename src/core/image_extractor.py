@@ -9,7 +9,7 @@ import gc
 import os
 import logging
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 from dataclasses import dataclass, field
 
 
@@ -36,7 +36,7 @@ class ImageExtractor:
     """이미지 추출기"""
     
     def __init__(self, clipboard_callback: Optional[Callable[[str], bool]] = None) -> None:
-        self._hwp = None
+        self._hwp: Any = None
         self._is_initialized = False
         self._logger = logging.getLogger(__name__)
         self._clipboard_callback = clipboard_callback
@@ -51,6 +51,13 @@ class ImageExtractor:
                 raise RuntimeError("pyhwpx가 설치되어 있지 않습니다.")
             except Exception as e:
                 raise RuntimeError(f"한글 프로그램 초기화 실패: {e}")
+
+    def _get_hwp(self) -> Any:
+        """초기화된 HWP 인스턴스 반환"""
+        self._ensure_hwp()
+        if self._hwp is None:
+            raise RuntimeError("한글 인스턴스 초기화 실패")
+        return self._hwp
     
     def close(self) -> None:
         if self._hwp is not None:
@@ -76,7 +83,7 @@ class ImageExtractor:
         source_path: str,
         output_dir: str,
         prefix: str = "",
-        progress_callback: Optional[Callable] = None
+        progress_callback: Optional[Callable[[int, int, str], None]] = None
     ) -> ExtractResult:
         """
         문서 내 모든 이미지 추출
@@ -91,7 +98,7 @@ class ImageExtractor:
             추출 결과
         """
         try:
-            self._ensure_hwp()
+            hwp = self._get_hwp()
             
             source = Path(source_path)
             if not source.exists():
@@ -100,14 +107,14 @@ class ImageExtractor:
             output_directory = Path(output_dir)
             output_directory.mkdir(parents=True, exist_ok=True)
             
-            self._hwp.open(source_path)
+            hwp.open(source_path)
             
             images: list[ImageInfo] = []
             image_count = 0
             
             try:
                 # 컨트롤 순회하며 이미지 찾기
-                ctrl = self._hwp.HeadCtrl
+                ctrl: Any = hwp.HeadCtrl
                 
                 while ctrl:
                     if ctrl.UserDesc in ["그림", "OLE개체", "그리기개체"]:
@@ -153,22 +160,23 @@ class ImageExtractor:
         except Exception as e:
             return ExtractResult(False, source_path, error_message=str(e))
     
-    def _extract_single_image(self, ctrl, output_dir: Path, filename: str) -> Optional[str]:
+    def _extract_single_image(self, ctrl: Any, output_dir: Path, filename: str) -> Optional[str]:
         """단일 이미지 추출"""
         try:
+            hwp = self._get_hwp()
             # 그림 컨트롤 선택
             ctrl.Select()
             
             # 이미지 데이터 가져오기
-            pset = self._hwp.HParameterSet.HShapeObject
-            self._hwp.HAction.GetDefault("ShapeObjAttrDialog", pset.HSet)
+            pset = hwp.HParameterSet.HShapeObject
+            hwp.HAction.GetDefault("ShapeObjAttrDialog", pset.HSet)
             
             # 그림 저장
             image_path = str(output_dir / f"{filename}.png")
             
             # SaveAs 또는 클립보드를 통한 저장
             try:
-                self._hwp.HAction.Run("Copy")
+                hwp.HAction.Run("Copy")
                 # 클립보드에서 이미지 저장
                 self._save_clipboard_image(image_path)
                 return image_path
@@ -203,9 +211,10 @@ class ImageExtractor:
         images: list[ImageInfo] = []
         
         try:
+            hwp = self._get_hwp()
             # HWP를 HWPX로 임시 변환
             temp_hwpx = output_dir / f"_temp_{Path(source_path).stem}.hwpx"
-            self._hwp.save_as(str(temp_hwpx), format="HWPX")
+            hwp.save_as(str(temp_hwpx), format="HWPX")
             
             # HWPX는 ZIP 포맷
             with zipfile.ZipFile(temp_hwpx, 'r') as zf:
@@ -246,7 +255,7 @@ class ImageExtractor:
         self,
         source_files: list[str],
         output_dir: str,
-        progress_callback: Optional[Callable] = None
+        progress_callback: Optional[Callable[[int, int, str], None]] = None
     ) -> list[ExtractResult]:
         """일괄 이미지 추출"""
         results: list[ExtractResult] = []
@@ -281,11 +290,11 @@ class ImageExtractor:
     def get_image_count(self, source_path: str) -> int:
         """문서 내 이미지 개수 반환"""
         try:
-            self._ensure_hwp()
-            self._hwp.open(source_path)
+            hwp = self._get_hwp()
+            hwp.open(source_path)
             
             count = 0
-            ctrl = self._hwp.HeadCtrl
+            ctrl: Any = hwp.HeadCtrl
             
             while ctrl:
                 if ctrl.UserDesc in ["그림", "OLE개체", "그리기개체"]:

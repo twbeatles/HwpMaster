@@ -33,11 +33,11 @@ class ReplacementRule:
     is_regex: bool = True
     case_sensitive: bool = False
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: dict) -> "ReplacementRule":
+    def from_dict(cls, data: dict[str, Any]) -> "ReplacementRule":
         return cls(**data)
 
 
@@ -310,7 +310,8 @@ class RegexReplacer:
                 hwp.save_as(save_path)
             
         except Exception as e:
-            results["_error"] = str(e)
+            self._logger.warning(f"파일 치환 중 오류: {e}")
+            results["_error"] = 0
         
         return results
     

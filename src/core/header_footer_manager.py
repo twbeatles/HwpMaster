@@ -8,10 +8,13 @@ Author: HWP Master
 import gc
 import logging
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, TYPE_CHECKING, Any
 from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime
+
+if TYPE_CHECKING:
+    from .hwp_handler import HwpHandler
 
 
 class PageNumberFormat(Enum):
@@ -123,16 +126,34 @@ class HeaderFooterManager:
     """
     
     def __init__(self) -> None:
-        self._handler = None
+        self._handler: Optional["HwpHandler"] = None
         self._logger = logging.getLogger(__name__)
+
+    def _ensure_hwp(self) -> None:
+        """HWP 핸들러 초기화 보장"""
+        self._get_hwp()
+
+    @property
+    def _hwp(self) -> Any:
+        """초기화된 내부 HWP 객체"""
+        return self._get_hwp()
     
-    def _get_hwp(self):
+    def _get_hwp(self) -> Any:
         """HwpHandler를 통해 HWP 인스턴스 반환"""
         if self._handler is None:
             from .hwp_handler import HwpHandler
-            self._handler = HwpHandler()
-            self._handler._ensure_hwp()
-        return self._handler._hwp
+            handler = HwpHandler()
+            handler._ensure_hwp()
+            self._handler = handler
+
+        handler = self._handler
+        if handler is None:
+            raise RuntimeError("HWP 핸들러 초기화 실패")
+
+        hwp = handler._hwp
+        if hwp is None:
+            raise RuntimeError("HWP 인스턴스 초기화 실패")
+        return hwp
     
     def close(self) -> None:
         """한글 인스턴스 종료"""

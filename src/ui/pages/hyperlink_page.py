@@ -23,6 +23,8 @@ class HyperlinkPage(QWidget):
     
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self.temp_dir: str = ""
+        self.worker = None
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -113,7 +115,7 @@ class HyperlinkPage(QWidget):
         self.scan_btn.setEnabled(False)
         self.export_btn.setEnabled(False)
         
-        from ..utils.worker import HyperlinkWorker
+        from ...utils.worker import HyperlinkWorker
         # 리포트 저장을 위한 임시 폴더 혹은 사용자 선택?
         # 예제에서는 검사 후 내보내기를 따로 하므로, 검사 단계에서는 report 생성을 안 하거나 임시 폴더 사용
         # 여기서는 report 생성 없이 검사만 수행 (Worker 수정 필요할 수도 있음, output_dir 필수인지 확인)
@@ -204,10 +206,15 @@ class HyperlinkPage(QWidget):
                     f.write("<table><tr><th>상태</th><th>URL</th><th>텍스트</th><th>오류</th></tr>")
                     
                     for r in range(self.link_table.rowCount()):
-                        status = self.link_table.item(r, 0).text()
-                        url = self.link_table.item(r, 1).text()
-                        text = self.link_table.item(r, 2).text()
-                        error = self.link_table.item(r, 3).text()
+                        status_item = self.link_table.item(r, 0)
+                        url_item = self.link_table.item(r, 1)
+                        text_item = self.link_table.item(r, 2)
+                        error_item = self.link_table.item(r, 3)
+
+                        status = status_item.text() if status_item else ""
+                        url = url_item.text() if url_item else ""
+                        text = text_item.text() if text_item else ""
+                        error = error_item.text() if error_item else ""
                         cls = "valid" if status == "✓" else "broken"
                         f.write(f"<tr><td class='{cls}'>{status}</td><td>{url}</td><td>{text}</td><td>{error}</td></tr>")
                     

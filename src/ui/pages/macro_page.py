@@ -6,7 +6,7 @@ Author: HWP Master
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
@@ -130,7 +130,7 @@ class CreateMacroDialog(QDialog):
         self.find_replace_frame.setVisible(index == 0)
         self.format_frame.setVisible(index == 1)
     
-    def get_data(self) -> dict:
+    def get_data(self) -> dict[str, Any]:
         color_map = {
             "빨강": "#FF0000",
             "파랑": "#0000FF",

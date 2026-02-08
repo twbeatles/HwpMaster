@@ -34,7 +34,7 @@ class TableStyleCard(QFrame):
     ) -> None:
         super().__init__(parent)
         self.preset_id = preset_id
-        self.style = style
+        self.table_style = style
         self.setProperty("class", "card")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedHeight(100)

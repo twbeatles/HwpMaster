@@ -9,9 +9,12 @@ import os
 import gc
 import logging
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, TYPE_CHECKING, Any
 from dataclasses import dataclass
 from enum import Enum
+
+if TYPE_CHECKING:
+    from .hwp_handler import HwpHandler
 
 
 class WatermarkType(Enum):
@@ -114,11 +117,15 @@ class WatermarkManager:
         """HwpHandler 인스턴스 초기화 및 반환"""
         if self._handler is None:
             from .hwp_handler import HwpHandler
-            self._handler = HwpHandler()
-            self._handler._ensure_hwp()
-        return self._handler
+            handler = HwpHandler()
+            handler._ensure_hwp()
+            self._handler = handler
+        handler = self._handler
+        if handler is None:
+            raise RuntimeError("HWP 핸들러 초기화 실패")
+        return handler
     
-    def _get_hwp(self):
+    def _get_hwp(self) -> Any:
         """내부 hwp 객체 반환"""
         handler = self._ensure_hwp()
         return handler._hwp

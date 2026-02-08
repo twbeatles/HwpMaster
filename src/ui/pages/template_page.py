@@ -6,7 +6,7 @@ Author: HWP Master
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -202,7 +202,7 @@ class AddTemplateDialog(QDialog):
         if file_path:
             self.file_edit.setText(file_path)
     
-    def get_data(self) -> dict:
+    def get_data(self) -> dict[str, Any]:
         return {
             "name": self.name_edit.text(),
             "file_path": self.file_edit.text(),
@@ -287,8 +287,9 @@ class TemplatePage(QWidget):
         # 기존 카드 제거
         while self._grid_layout.count():
             item = self._grid_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
         
         # 템플릿 가져오기
         if self._current_category == "전체":
@@ -392,7 +393,7 @@ class TemplatePage(QWidget):
         )
         
         if reply == QMessageBox.StandardButton.Yes:
-            if self._store.delete_template(template_id):
+            if self._store.remove_template(template_id):
                 self._load_templates()
                 QMessageBox.information(self, "완료", "템플릿이 삭제되었습니다.")
             else:

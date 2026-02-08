@@ -10,7 +10,7 @@ import logging
 import urllib.request
 import urllib.error
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -50,7 +50,7 @@ class HyperlinkChecker:
     """하이퍼링크 검사기"""
     
     def __init__(self) -> None:
-        self._hwp = None
+        self._hwp: Any = None
         self._is_initialized = False
         self._logger = logging.getLogger(__name__)
         self._timeout = 5  # 초
@@ -65,6 +65,13 @@ class HyperlinkChecker:
                 raise RuntimeError("pyhwpx가 설치되어 있지 않습니다.")
             except Exception as e:
                 raise RuntimeError(f"한글 프로그램 초기화 실패: {e}")
+
+    def _get_hwp(self) -> Any:
+        """초기화된 HWP 인스턴스 반환"""
+        self._ensure_hwp()
+        if self._hwp is None:
+            raise RuntimeError("한글 인스턴스 초기화 실패")
+        return self._hwp
     
     def close(self) -> None:
         if self._hwp is not None:
@@ -88,21 +95,21 @@ class HyperlinkChecker:
     def extract_links(self, source_path: str) -> LinkCheckResult:
         """문서 내 모든 링크 추출"""
         try:
-            self._ensure_hwp()
+            hwp = self._get_hwp()
             source = Path(source_path)
             if not source.exists():
                 return LinkCheckResult(False, source_path, error_message="파일 없음")
             
-            self._hwp.open(source_path)
-            links = []
+            hwp.open(source_path)
+            links: list[LinkInfo] = []
             
             try:
-                ctrl = self._hwp.HeadCtrl
+                ctrl: Any = hwp.HeadCtrl
                 while ctrl:
                     if ctrl.UserDesc == "하이퍼링크":
                         try:
-                            url = ctrl.GetSetItem("HyperLink")
-                            text = ctrl.GetSetItem("Text") or url
+                            url = str(ctrl.GetSetItem("HyperLink"))
+                            text = str(ctrl.GetSetItem("Text") or url)
                             links.append(LinkInfo(url=url, text=text, page=0))
                         except Exception as e:
                             self._logger.warning(f"하이퍼링크 정보 추출 실패: {e}")
@@ -150,7 +157,11 @@ class HyperlinkChecker:
         except Exception as e:
             return LinkStatus.UNKNOWN, str(e)
     
-    def check_links(self, source_path: str, progress_callback: Optional[Callable] = None) -> LinkCheckResult:
+    def check_links(
+        self,
+        source_path: str,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None
+    ) -> LinkCheckResult:
         """문서 내 모든 링크 추출 및 검사"""
         result = self.extract_links(source_path)
         if not result.success:

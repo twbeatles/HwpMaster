@@ -35,11 +35,11 @@ class TableStyle:
     header_bg_color: Optional[str] = None  # 헤더 배경색
     alternate_row_color: Optional[str] = None  # 줄무늬 색상
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: dict) -> "TableStyle":
+    def from_dict(cls, data: dict[str, Any]) -> "TableStyle":
         return cls(**data)
 
 

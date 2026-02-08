@@ -9,7 +9,7 @@ import json
 import logging
 import shutil
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, TypedDict
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from enum import Enum
@@ -49,6 +49,15 @@ class TemplateInfo:
         return cls(**data)
 
 
+class BuiltinTemplateSpec(TypedDict):
+    """내장 템플릿 스펙"""
+    id: str
+    name: str
+    description: str
+    category: str
+    fields: list[str]
+
+
 class TemplateStore:
     """
     템플릿 스토어 관리 클래스
@@ -56,7 +65,7 @@ class TemplateStore:
     """
     
     # 내장 템플릿 정의
-    BUILTIN_TEMPLATES = [
+    BUILTIN_TEMPLATES: list[BuiltinTemplateSpec] = [
         {
             "id": "leave_annual",
             "name": "연차휴가 신청서",

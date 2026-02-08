@@ -36,11 +36,11 @@ class StyleRule:
     heading_font_name: Optional[str] = None
     heading_font_size: Optional[float] = None
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: dict) -> "StyleRule":
+    def from_dict(cls, data: dict[str, Any]) -> "StyleRule":
         return cls(**data)
 
 

@@ -8,7 +8,7 @@ Author: HWP Master
 import json
 from pathlib import Path
 from typing import Optional, Any
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from enum import Enum
 
@@ -42,8 +42,8 @@ class HistoryItem:
     success_count: int
     fail_count: int
     timestamp: str
-    files: list = None
-    options: dict = None
+    files: list[str] = field(default_factory=list)
+    options: dict[str, Any] = field(default_factory=dict)
     
     def __post_init__(self):
         if self.files is None:
@@ -94,7 +94,7 @@ class HistoryManager:
         files: list[str],
         success_count: int,
         fail_count: int,
-        options: Optional[dict] = None
+        options: Optional[dict[str, Any]] = None
     ) -> HistoryItem:
         """히스토리 추가"""
         item = HistoryItem(

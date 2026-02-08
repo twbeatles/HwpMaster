@@ -22,6 +22,7 @@ class BookmarkPage(QWidget):
     
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self.worker = None
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -95,7 +96,7 @@ class BookmarkPage(QWidget):
     
     def _run_worker(self, mode: str, files: list[str], output_dir: Optional[str] = None) -> None:
         """작업 실행 공통 메서드"""
-        from ..utils.worker import BookmarkWorker
+        from ...utils.worker import BookmarkWorker
         
         self.worker = BookmarkWorker(mode, files, output_dir)
         self.worker.progress.connect(self._on_progress)

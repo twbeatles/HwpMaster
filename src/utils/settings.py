@@ -36,11 +36,11 @@ class AppSettings:
     window_width: int = 1400
     window_height: int = 900
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: dict) -> "AppSettings":
+    def from_dict(cls, data: dict[str, Any]) -> "AppSettings":
         # 알려진 필드만 추출
         known_fields = {f.name for f in cls.__dataclass_fields__.values()}
         filtered = {k: v for k, v in data.items() if k in known_fields}

@@ -179,13 +179,21 @@ class ToastManager:
     """토스트 관리자 (싱글톤)"""
     
     _instance: Optional["ToastManager"] = None
+    _initialized: bool = False
+    _toasts: list[Toast] = []
+    _parent: Optional[QWidget] = None
     
     def __new__(cls) -> "ToastManager":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._toasts: list[Toast] = []
-            cls._instance._parent: Optional[QWidget] = None
         return cls._instance
+
+    def __init__(self) -> None:
+        if self._initialized:
+            return
+        self._toasts = []
+        self._parent = None
+        self._initialized = True
     
     def set_parent(self, parent: QWidget) -> None:
         self._parent = parent

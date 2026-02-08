@@ -5,7 +5,7 @@ Watermark Page
 Author: HWP Master
 """
 
-from typing import Optional
+from typing import Any, Mapping, Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QLineEdit, QSpinBox, QSlider,
@@ -33,7 +33,7 @@ class PresetCard(QFrame):
     """프리셋 카드"""
     clicked = Signal(str)
     
-    def __init__(self, name: str, config: dict, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, name: str, config: Mapping[str, object], parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.name = name
         self.setObjectName("presetCard")
@@ -74,6 +74,7 @@ class WatermarkPage(QWidget):
     
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self.worker: Any = None
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -219,8 +220,10 @@ class WatermarkPage(QWidget):
         self.stack.setCurrentIndex(0)
         
         # 2. 값 설정
-        self.text_input.setText(config.get("text", ""))
-        self.opacity_slider.setValue(config.get("opacity", 25))
+        text_value = str(config.get("text", ""))
+        opacity_value = int(config.get("opacity", 25))
+        self.text_input.setText(text_value)
+        self.opacity_slider.setValue(opacity_value)
         
         # 3. 알림
         get_toast_manager().info(f"프리셋 '{name}'이(가) 적용되었습니다.")
@@ -257,7 +260,7 @@ class WatermarkPage(QWidget):
             if not output_dir:
                 return
 
-        from ..utils.worker import WatermarkWorker
+        from ...utils.worker import WatermarkWorker
         self.worker = WatermarkWorker("remove", files, output_dir=output_dir)
         self._run_worker()
         
@@ -268,7 +271,7 @@ class WatermarkPage(QWidget):
             get_toast_manager().warning("파일을 추가해주세요.")
             return
         
-        from ..core.watermark_manager import WatermarkConfig, WatermarkType
+        from ...core.watermark_manager import WatermarkConfig, WatermarkType
         
         is_text = self.radio_text.isChecked()
         watermark_type = WatermarkType.TEXT if is_text else WatermarkType.IMAGE
@@ -309,11 +312,13 @@ class WatermarkPage(QWidget):
             if not output_dir:
                 return
 
-        from ..utils.worker import WatermarkWorker
+        from ...utils.worker import WatermarkWorker
         self.worker = WatermarkWorker("apply", files, config, output_dir)
         self._run_worker()
         
-    def _run_worker(self):
+    def _run_worker(self) -> None:
+        if self.worker is None:
+            return
         self.worker.progress.connect(self._on_progress)
         self.worker.finished_with_result.connect(self._on_finished)
         self.worker.error_occurred.connect(self._on_error)

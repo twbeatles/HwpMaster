@@ -23,6 +23,7 @@ class ImageExtractorPage(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._output_dir = ""
+        self.worker = None
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -139,7 +140,7 @@ class ImageExtractorPage(QWidget):
         
         # 데모 데이터
         # Worker 설정
-        from ..utils.worker import ImageExtractWorker
+        from ...utils.worker import ImageExtractWorker
         
         prefix = self.prefix_input.text().strip()
         

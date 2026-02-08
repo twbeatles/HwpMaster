@@ -97,7 +97,7 @@ class LogCapture:
     
     def __enter__(self):
         class ListHandler(logging.Handler):
-            def __init__(self, message_list: list):
+            def __init__(self, message_list: list[str]):
                 super().__init__()
                 self.message_list = message_list
             

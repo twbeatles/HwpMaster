@@ -264,6 +264,7 @@ class MainWindow(QMainWindow):
     
     def __init__(self) -> None:
         super().__init__()
+        self._settings = get_settings_manager()
         
         self.setWindowTitle("HWP Master")
         self.setMinimumSize(1200, 800)
@@ -296,6 +297,7 @@ class MainWindow(QMainWindow):
         self.data_inject_page = DataInjectPage()
         self.metadata_page = MetadataPage()
         self.settings_page = SettingsPage()
+        self._sync_settings_page()
         
         self.page_stack.addWidget(self.home_page)
         self.page_stack.addWidget(self.convert_page)
@@ -358,6 +360,19 @@ class MainWindow(QMainWindow):
         
         # Worker 참조
         self._current_worker = None
+
+    def _get_default_output_dir(self) -> str:
+        """설정 기반 기본 출력 디렉토리 반환"""
+        configured = self._settings.get("default_output_dir", "")
+        if configured and Path(configured).exists():
+            return configured
+        return str(Path.home() / "Documents")
+
+    def _sync_settings_page(self) -> None:
+        """설정값을 설정 페이지 UI에 반영"""
+        default_output_dir = self._settings.get("default_output_dir", "")
+        if default_output_dir:
+            self.settings_page.output_label.setText(default_output_dir)
     
     def set_busy(self, busy: bool) -> None:
         """작업 중 상태 설정"""
@@ -461,7 +476,10 @@ class MainWindow(QMainWindow):
         if is_merge:
             # 병합 출력 파일 선택
             output_path, _ = QFileDialog.getSaveFileName(
-                self, "병합 파일 저장", "", "HWP 파일 (*.hwp)"
+                self,
+                "병합 파일 저장",
+                str(Path(self._get_default_output_dir()) / "merged.hwp"),
+                "HWP 파일 (*.hwp)"
             )
             if not output_path:
                 self.merge_split_page.execute_btn.setEnabled(True)
@@ -499,7 +517,7 @@ class MainWindow(QMainWindow):
             
             # 출력 디렉토리 선택
             output_dir = QFileDialog.getExistingDirectory(
-                self, "분할 파일 저장 위치", str(Path.home() / "Documents")
+                self, "분할 파일 저장 위치", self._get_default_output_dir()
             )
             if not output_dir:
                 self.merge_split_page.execute_btn.setEnabled(True)
@@ -591,10 +609,12 @@ class MainWindow(QMainWindow):
         
         # 출력 디렉토리 선택
         output_dir = QFileDialog.getExistingDirectory(
-            self, "출력 폴더 선택", str(Path.home() / "Documents")
+            self, "출력 폴더 선택", self._get_default_output_dir()
         )
         if not output_dir:
             return
+
+        data_rows: list[dict[str, str]] = []
         
         # 데이터 파일 읽기
         try:
@@ -602,13 +622,24 @@ class MainWindow(QMainWindow):
             handler = ExcelHandler()
             
             if data_file.endswith('.csv'):
-                data_list = handler.read_csv(data_file)
+                read_result = handler.read_csv(data_file)
             else:
-                data_list = handler.read_excel(data_file)
-            
-            if not data_list:
+                read_result = handler.read_excel(data_file)
+
+            if not read_result.success:
+                QMessageBox.warning(self, "오류", read_result.error_message or "데이터 파일 읽기에 실패했습니다.")
+                return
+
+            if not read_result.data:
                 QMessageBox.warning(self, "알림", "데이터 파일이 비어있습니다.")
                 return
+
+            for row in read_result.data:
+                normalized_row = {
+                    str(key): "" if value is None else str(value)
+                    for key, value in row.items()
+                }
+                data_rows.append(normalized_row)
                 
         except Exception as e:
             QMessageBox.warning(self, "오류", f"데이터 파일 읽기 실패:\n{e}")
@@ -621,7 +652,7 @@ class MainWindow(QMainWindow):
         # Worker 시작
         self.set_busy(True)
         self._current_worker = DataInjectWorker(
-            template, data_list, output_dir
+            template, data_rows, output_dir
         )
         self._current_worker.progress.connect(
             lambda c, t, n: self.data_inject_page.progress_card.set_count(c, t)
@@ -699,7 +730,8 @@ class MainWindow(QMainWindow):
         dir_path = QFileDialog.getExistingDirectory(
             self,
             "출력 폴더 선택",
-            str(Path.home() / "Documents")
+            self._get_default_output_dir()
         )
         if dir_path:
+            self._settings.set("default_output_dir", dir_path)
             self.settings_page.output_label.setText(dir_path)

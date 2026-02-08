@@ -10,7 +10,7 @@ import gc
 import re
 import logging
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 from dataclasses import dataclass
 from enum import Enum
 
@@ -40,7 +40,7 @@ class HwpHandler:
     """
     
     def __init__(self) -> None:
-        self._hwp = None
+        self._hwp: Any = None
         self._is_initialized = False
         self._logger = logging.getLogger(__name__)
     
@@ -55,6 +55,13 @@ class HwpHandler:
                 raise RuntimeError("pyhwpx가 설치되어 있지 않습니다. 'pip install pyhwpx'로 설치해주세요.")
             except Exception as e:
                 raise RuntimeError(f"한글 프로그램 초기화 실패: {e}")
+
+    def _get_hwp(self) -> Any:
+        """초기화된 HWP 인스턴스 반환"""
+        self._ensure_hwp()
+        if self._hwp is None:
+            raise RuntimeError("한글 인스턴스 초기화 실패")
+        return self._hwp
     
     def close(self) -> None:
         """한글 인스턴스 종료"""
@@ -102,7 +109,7 @@ class HwpHandler:
     ) -> ConversionResult:
         """내부 변환 메서드"""
         try:
-            self._ensure_hwp()
+            hwp = self._get_hwp()
             
             source = Path(source_path)
             if not source.exists():
@@ -117,7 +124,7 @@ class HwpHandler:
                 output_path = str(source.with_suffix(f".{target_format.value}"))
             
             # 파일 열기
-            self._hwp.open(source_path)
+            hwp.open(source_path)
             
             # 포맷별 저장
             format_map = {
@@ -129,7 +136,7 @@ class HwpHandler:
             }
             
             save_format = format_map.get(target_format, "PDF")
-            self._hwp.save_as(output_path, format=save_format)
+            hwp.save_as(output_path, format=save_format)
             
             return ConversionResult(
                 success=True,
@@ -167,7 +174,7 @@ class HwpHandler:
         total = len(source_files)
         
         try:
-            self._ensure_hwp()
+            hwp = self._get_hwp()
             
             for idx, source_path in enumerate(source_files):
                 # 콜백 호출
@@ -222,7 +229,7 @@ class HwpHandler:
             병합 결과
         """
         try:
-            self._ensure_hwp()
+            hwp = self._get_hwp()
             
             if len(source_files) < 2:
                 return ConversionResult(
@@ -236,7 +243,7 @@ class HwpHandler:
             # 첫 번째 파일 열기
             if progress_callback:
                 progress_callback(1, total, Path(source_files[0]).name)
-            self._hwp.open(source_files[0])
+            hwp.open(source_files[0])
             
             # 나머지 파일 삽입
             for idx, file_path in enumerate(source_files[1:], start=2):
@@ -244,16 +251,16 @@ class HwpHandler:
                     progress_callback(idx, total, Path(file_path).name)
                 
                 # 문서 끝으로 이동 (pyhwpx Run 액션 사용)
-                self._hwp.Run("MoveDocEnd")
+                hwp.Run("MoveDocEnd")
                 # 페이지 나누기 삽입 (pyhwpx Run 액션 사용)
-                self._hwp.Run("BreakPage")
+                hwp.Run("BreakPage")
                 # 파일 삽입 (InsertFile 액션 사용)
-                self._hwp.Run("InsertFile")
-                self._hwp.HParameterSet.HInsertFile.filename = file_path
-                self._hwp.HAction.Execute("InsertFile", self._hwp.HParameterSet.HInsertFile.HSet)
+                hwp.Run("InsertFile")
+                hwp.HParameterSet.HInsertFile.filename = file_path
+                hwp.HAction.Execute("InsertFile", hwp.HParameterSet.HInsertFile.HSet)
             
             # 저장
-            self._hwp.save_as(output_path)
+            hwp.save_as(output_path)
             
             return ConversionResult(
                 success=True,
@@ -338,7 +345,7 @@ class HwpHandler:
         results: list[ConversionResult] = []
         
         try:
-            self._ensure_hwp()
+            hwp = self._get_hwp()
             
             source = Path(source_path)
             output_directory = Path(output_dir)
@@ -352,10 +359,10 @@ class HwpHandler:
                 
                 try:
                     # 원본 다시 열기
-                    self._hwp.open(source_path)
+                    hwp.open(source_path)
                     
                     # 전체 페이지 수 확인 (pyhwpx 속성 사용)
-                    total_pages = self._hwp.PageCount
+                    total_pages = hwp.PageCount
                     
                     # 페이지 범위 파싱
                     pages = self.parse_page_range(range_str, total_pages)
@@ -381,19 +388,19 @@ class HwpHandler:
                         # 해당 페이지로 이동 후 페이지 전체 선택하여 삭제
                         try:
                             # 페이지 이동 (pyhwpx Run 액션 사용)
-                            self._hwp.Run("MoveDocBegin")
+                            hwp.Run("MoveDocBegin")
                             for _ in range(page - 1):
-                                self._hwp.Run("MovePageDown")
+                                hwp.Run("MovePageDown")
                             # 페이지 범위 선택 및 삭제
-                            self._hwp.Run("MovePageBegin")
-                            self._hwp.Run("MoveSelPageDown")
-                            self._hwp.Run("Delete")
+                            hwp.Run("MovePageBegin")
+                            hwp.Run("MoveSelPageDown")
+                            hwp.Run("Delete")
                         except Exception as del_e:
                             self._logger.warning(f"페이지 {page} 삭제 중 오류 (무시됨): {del_e}")
-                            self._hwp.Run("Cancel")  # 선택 해제
+                            hwp.Run("Cancel")  # 선택 해제
                     
                     # 저장
-                    self._hwp.save_as(output_path)
+                    hwp.save_as(output_path)
                     
                     results.append(ConversionResult(
                         success=True,
@@ -439,15 +446,15 @@ class HwpHandler:
             주입 결과
         """
         try:
-            self._ensure_hwp()
+            hwp = self._get_hwp()
             
-            self._hwp.open(template_path)
+            hwp.open(template_path)
             
             # 누름틀(Field)에 데이터 삽입
             failed_fields = []
             for field_name, value in data.items():
                 try:
-                    self._hwp.put_field_text(field_name, str(value))
+                    hwp.put_field_text(field_name, str(value))
                 except Exception as e:
                     failed_fields.append(field_name)
                     self._logger.debug(f"필드 '{field_name}' 주입 실패: {e}")
@@ -455,7 +462,7 @@ class HwpHandler:
             if failed_fields:
                 self._logger.info(f"주입되지 않은 필드: {failed_fields}")
             
-            self._hwp.save_as(output_path)
+            hwp.save_as(output_path)
             
             return ConversionResult(
                 success=True,
@@ -565,38 +572,38 @@ class HwpHandler:
             default_options.update(options)
         
         try:
-            self._ensure_hwp()
+            hwp = self._get_hwp()
             
-            self._hwp.open(source_path)
+            hwp.open(source_path)
             
             if default_options["remove_author"]:
                 try:
-                    self._hwp.set_document_info("author", "")
-                    self._hwp.set_document_info("company", "")
+                    hwp.set_document_info("author", "")
+                    hwp.set_document_info("company", "")
                 except Exception as e:
                     self._logger.warning(f"작성자 정보 제거 실패: {e}")
             
             if default_options["remove_comments"]:
                 try:
-                    self._hwp.delete_all_comments()
+                    hwp.delete_all_comments()
                 except Exception as e:
                     self._logger.warning(f"메모 제거 실패: {e}")
             
             if default_options["remove_tracking"]:
                 try:
-                    self._hwp.accept_all_changes()
+                    hwp.accept_all_changes()
                 except Exception as e:
                     self._logger.warning(f"변경 추적 내용 수락 실패: {e}")
             
             if default_options["set_distribution"]:
                 try:
-                    self._hwp.set_distribution_mode(True)
+                    hwp.set_distribution_mode(True)
                 except Exception as e:
                     self._logger.warning(f"배포용 문서 설정 실패: {e}")
             
             # 저장
             save_path = output_path if output_path else source_path
-            self._hwp.save_as(save_path)
+            hwp.save_as(save_path)
             
             return ConversionResult(
                 success=True,

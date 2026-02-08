@@ -29,7 +29,7 @@ class DiffLine:
     original_text: str = ""
     new_text: str = ""
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "line": self.line_number,
             "type": self.change_type.value,

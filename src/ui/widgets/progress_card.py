@@ -89,6 +89,7 @@ class ProgressCard(QFrame):
         
         # 애니메이션
         self._animation: Optional[QPropertyAnimation] = None
+        self._close_animation: Optional[QPropertyAnimation] = None
     
     def set_title(self, title: str) -> None:
         """제목 설정"""
@@ -198,6 +199,8 @@ class ToastNotification(QFrame):
         
         # 페이드 인 애니메이션
         self.setWindowOpacity(0)
+        self._animation: Optional[QPropertyAnimation] = None
+        self._close_animation: Optional[QPropertyAnimation] = None
         self._fade_in()
     
     def _fade_in(self) -> None:

@@ -5,11 +5,15 @@ QThread 기반 백그라운드 작업 처리
 Author: HWP Master
 """
 
-from typing import Any, Optional, Callable
+from typing import Any, Optional, Callable, TYPE_CHECKING
 from dataclasses import dataclass
 from enum import Enum
 
 from PySide6.QtCore import QThread, Signal, QMutex, QMutexLocker
+
+if TYPE_CHECKING:
+    from ..core.header_footer_manager import HeaderFooterConfig
+    from ..core.watermark_manager import WatermarkConfig
 
 
 class WorkerState(Enum):
@@ -541,6 +545,13 @@ class BookmarkWorker(BaseWorker):
                     data = {"success_count": success_count, "total": len(self._files)}
                 
                 elif self._mode == "export":
+                    if self._output_dir is None:
+                        self.state = WorkerState.ERROR
+                        self.finished_with_result.emit(
+                            WorkerResult(success=False, error_message="출력 폴더가 필요합니다.")
+                        )
+                        return
+
                     results = manager.batch_export_bookmarks(
                         self._files,
                         self._output_dir,
@@ -648,7 +659,7 @@ class HeaderFooterWorker(BaseWorker):
         self,
         mode: str, # "apply" or "remove"
         files: list[str],
-        config=None, # HeaderFooterConfig
+        config: Optional["HeaderFooterConfig"] = None,
         output_dir: Optional[str] = None,
         parent=None
     ) -> None:
@@ -671,9 +682,17 @@ class HeaderFooterWorker(BaseWorker):
                     self.status_changed.emit(f"처리 중: {name}")
                 
                 if self._mode == "apply":
+                    if self._config is None:
+                        self.state = WorkerState.ERROR
+                        self.finished_with_result.emit(
+                            WorkerResult(success=False, error_message="헤더/푸터 설정이 필요합니다.")
+                        )
+                        return
+
+                    config = self._config
                     results = manager.batch_apply_header_footer(
                         self._files,
-                        self._config,
+                        config,
                         self._output_dir,
                         progress_callback=progress_cb
                     )
@@ -709,7 +728,7 @@ class WatermarkWorker(BaseWorker):
         self,
         mode: str, # "apply" or "remove"
         files: list[str],
-        config=None, # WatermarkConfig
+        config: Optional["WatermarkConfig"] = None,
         output_dir: Optional[str] = None,
         parent=None
     ) -> None:
@@ -732,9 +751,17 @@ class WatermarkWorker(BaseWorker):
                     self.status_changed.emit(f"처리 중: {name}")
                 
                 if self._mode == "apply":
+                    if self._config is None:
+                        self.state = WorkerState.ERROR
+                        self.finished_with_result.emit(
+                            WorkerResult(success=False, error_message="워터마크 설정이 필요합니다.")
+                        )
+                        return
+
+                    config = self._config
                     results = manager.batch_apply_watermark(
                         self._files,
-                        self._config,
+                        config,
                         self._output_dir,
                         progress_callback=progress_cb
                     )

@@ -48,6 +48,7 @@ class ExcelHandler:
         Returns:
             ExcelReadResult 객체
         """
+        wb = None
         try:
             from openpyxl import load_workbook
             
@@ -77,6 +78,15 @@ class ExcelHandler:
                 ws = wb[sheet_name]
             else:
                 ws = wb.active
+
+            if ws is None:
+                return ExcelReadResult(
+                    success=False,
+                    data=[],
+                    headers=[],
+                    row_count=0,
+                    error_message="시트를 찾을 수 없습니다."
+                )
             
             # 헤더 추출
             headers: list[str] = []
@@ -110,8 +120,6 @@ class ExcelHandler:
                 data.append(row_data)
                 row_idx += 1
             
-            wb.close()
-            
             return ExcelReadResult(
                 success=True,
                 data=data,
@@ -135,6 +143,12 @@ class ExcelHandler:
                 row_count=0,
                 error_message=str(e)
             )
+        finally:
+            if wb is not None:
+                try:
+                    wb.close()
+                except Exception:
+                    pass
     
     @staticmethod
     def read_excel_streaming(
@@ -158,46 +172,49 @@ class ExcelHandler:
         from openpyxl import load_workbook
         
         wb = load_workbook(file_path, data_only=True, read_only=True)
-        
-        if sheet_name:
-            ws = wb[sheet_name]
-        else:
-            ws = wb.active
-        
-        # 헤더 추출
-        headers: list[str] = []
-        for cell in ws[header_row]:
-            value = cell.value
-            if value is not None:
-                headers.append(str(value).strip())
+        try:
+            if sheet_name:
+                ws = wb[sheet_name]
             else:
-                headers.append(f"Column_{cell.column}")
-        
-        # 데이터 스트리밍
-        chunk: list[dict[str, Any]] = []
-        
-        for row in ws.iter_rows(min_row=header_row + 1):
-            first_cell_value = row[0].value if row else None
-            if first_cell_value is None:
-                continue
-            
-            row_data: dict[str, Any] = {}
-            for idx, cell in enumerate(row):
-                if idx < len(headers):
-                    value = cell.value
-                    row_data[headers[idx]] = value if value is not None else ""
-            
-            chunk.append(row_data)
-            
-            if len(chunk) >= chunk_size:
+                ws = wb.active
+
+            if ws is None:
+                return
+
+            # 헤더 추출
+            headers: list[str] = []
+            for cell in ws[header_row]:
+                value = cell.value
+                if value is not None:
+                    headers.append(str(value).strip())
+                else:
+                    headers.append(f"Column_{cell.column}")
+
+            # 데이터 스트리밍
+            chunk: list[dict[str, Any]] = []
+
+            for row in ws.iter_rows(min_row=header_row + 1):
+                first_cell_value = row[0].value if row else None
+                if first_cell_value is None:
+                    continue
+
+                row_data: dict[str, Any] = {}
+                for idx, cell in enumerate(row):
+                    if idx < len(headers):
+                        value = cell.value
+                        row_data[headers[idx]] = value if value is not None else ""
+
+                chunk.append(row_data)
+
+                if len(chunk) >= chunk_size:
+                    yield chunk
+                    chunk = []
+
+            # 남은 데이터
+            if chunk:
                 yield chunk
-                chunk = []
-        
-        # 남은 데이터
-        if chunk:
-            yield chunk
-        
-        wb.close()
+        finally:
+            wb.close()
     
     @staticmethod
     def read_csv(
@@ -232,7 +249,7 @@ class ExcelHandler:
             
             with open(file_path, "r", encoding=encoding, newline="") as f:
                 reader = csv.DictReader(f, delimiter=delimiter)
-                headers = reader.fieldnames or []
+                headers = list(reader.fieldnames or [])
                 
                 for row in reader:
                     data.append(dict(row))
@@ -249,7 +266,7 @@ class ExcelHandler:
             try:
                 with open(file_path, "r", encoding="cp949", newline="") as f:
                     reader = csv.DictReader(f, delimiter=delimiter)
-                    headers = reader.fieldnames or []
+                    headers = list(reader.fieldnames or [])
                     data = [dict(row) for row in reader]
                 
                 return ExcelReadResult(
@@ -403,6 +420,8 @@ class ExcelHandler:
             
             wb = Workbook()
             ws = wb.active
+            if ws is None:
+                return False
             ws.title = sheet_name
             
             # 헤더 작성

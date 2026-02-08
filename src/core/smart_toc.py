@@ -30,7 +30,7 @@ class TocEntry:
     font_size: float = 0.0
     is_bold: bool = False
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "level": self.level,
             "text": self.text,
@@ -115,7 +115,7 @@ class SmartTOC:
         self._logger = logging.getLogger(__name__)
         self._rules = self.DEFAULT_RULES.copy()
     
-    def set_rules(self, rules: dict) -> None:
+    def set_rules(self, rules: dict[str, Any]) -> None:
         """규칙 설정"""
         self._rules.update(rules)
     
