@@ -279,51 +279,7 @@ class DocDiff:
             # 텍스트 추출
             lines1 = self.extract_text(file1_path)
             lines2 = self.extract_text(file2_path)
-            
-            result = DiffResult(
-                success=True,
-                file1_path=file1_path,
-                file2_path=file2_path,
-                file1_lines=len(lines1),
-                file2_lines=len(lines2)
-            )
-            
-            # difflib을 사용한 비교
-            differ = difflib.unified_diff(
-                lines1, lines2,
-                fromfile=file1_path,
-                tofile=file2_path,
-                lineterm=''
-            )
-            
-            line_num = 0
-            for line in differ:
-                if line.startswith('@@'):
-                    # 위치 정보 파싱
-                    try:
-                        parts = line.split()
-                        if len(parts) >= 2:
-                            line_num = abs(int(parts[1].split(',')[0]))
-                    except Exception:
-                        pass # 파싱 실패는 무시
-                elif line.startswith('+') and not line.startswith('+++'):
-                    result.added_count += 1
-                    result.changes.append(DiffLine(
-                        line_number=line_num,
-                        change_type=ChangeType.ADDED,
-                        new_text=line[1:].strip()
-                    ))
-                    line_num += 1
-                elif line.startswith('-') and not line.startswith('---'):
-                    result.deleted_count += 1
-                    result.changes.append(DiffLine(
-                        line_number=line_num,
-                        change_type=ChangeType.DELETED,
-                        original_text=line[1:].strip()
-                    ))
-                    line_num += 1
-            
-            return result
+            return self._compare_lines(lines1, lines2, file1_path, file2_path)
             
         except Exception as e:
             return DiffResult(
@@ -332,6 +288,84 @@ class DocDiff:
                 file2_path=file2_path,
                 error_message=str(e)
             )
+
+    def _compare_lines(
+        self,
+        lines1: list[str],
+        lines2: list[str],
+        file1_path: str,
+        file2_path: str,
+    ) -> DiffResult:
+        """
+        SequenceMatcher 기반 라인 비교.
+
+        - replace 구간은 (modified + added/deleted)로 분해해서 카운트를 더 정확히 산출합니다.
+        """
+        result = DiffResult(
+            success=True,
+            file1_path=file1_path,
+            file2_path=file2_path,
+            file1_lines=len(lines1),
+            file2_lines=len(lines2),
+        )
+
+        matcher = difflib.SequenceMatcher(None, lines1, lines2)
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag == "equal":
+                continue
+            if tag == "delete":
+                for i in range(i1, i2):
+                    result.deleted_count += 1
+                    result.changes.append(DiffLine(
+                        line_number=i + 1,
+                        change_type=ChangeType.DELETED,
+                        original_text=lines1[i],
+                    ))
+                continue
+            if tag == "insert":
+                for j in range(j1, j2):
+                    result.added_count += 1
+                    result.changes.append(DiffLine(
+                        line_number=j + 1,
+                        change_type=ChangeType.ADDED,
+                        new_text=lines2[j],
+                    ))
+                continue
+
+            # tag == "replace"
+            old_len = i2 - i1
+            new_len = j2 - j1
+            paired = min(old_len, new_len)
+
+            # Modified (paired lines)
+            for k in range(paired):
+                result.modified_count += 1
+                result.changes.append(DiffLine(
+                    line_number=i1 + k + 1,
+                    change_type=ChangeType.MODIFIED,
+                    original_text=lines1[i1 + k],
+                    new_text=lines2[j1 + k],
+                ))
+
+            # Extra old lines => deleted
+            for i in range(i1 + paired, i2):
+                result.deleted_count += 1
+                result.changes.append(DiffLine(
+                    line_number=i + 1,
+                    change_type=ChangeType.DELETED,
+                    original_text=lines1[i],
+                ))
+
+            # Extra new lines => added
+            for j in range(j1 + paired, j2):
+                result.added_count += 1
+                result.changes.append(DiffLine(
+                    line_number=j + 1,
+                    change_type=ChangeType.ADDED,
+                    new_text=lines2[j],
+                ))
+
+        return result
     
     def compare_text(
         self,
@@ -341,47 +375,9 @@ class DocDiff:
         """
         텍스트 직접 비교
         """
-        lines1 = text1.split('\n')
-        lines2 = text2.split('\n')
-        
-        result = DiffResult(
-            success=True,
-            file1_path="text1",
-            file2_path="text2",
-            file1_lines=len(lines1),
-            file2_lines=len(lines2)
-        )
-        
-        matcher = difflib.SequenceMatcher(None, lines1, lines2)
-        
-        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-            if tag == 'replace':
-                for i in range(i1, i2):
-                    result.modified_count += 1
-                    result.changes.append(DiffLine(
-                        line_number=i + 1,
-                        change_type=ChangeType.MODIFIED,
-                        original_text=lines1[i] if i < len(lines1) else "",
-                        new_text=lines2[j1 + (i - i1)] if j1 + (i - i1) < len(lines2) else ""
-                    ))
-            elif tag == 'delete':
-                for i in range(i1, i2):
-                    result.deleted_count += 1
-                    result.changes.append(DiffLine(
-                        line_number=i + 1,
-                        change_type=ChangeType.DELETED,
-                        original_text=lines1[i]
-                    ))
-            elif tag == 'insert':
-                for j in range(j1, j2):
-                    result.added_count += 1
-                    result.changes.append(DiffLine(
-                        line_number=j + 1,
-                        change_type=ChangeType.ADDED,
-                        new_text=lines2[j]
-                    ))
-        
-        return result
+        lines1 = text1.split("\n")
+        lines2 = text2.split("\n")
+        return self._compare_lines(lines1, lines2, "text1", "text2")
     
     def generate_report(
         self,

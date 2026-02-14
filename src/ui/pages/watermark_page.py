@@ -15,7 +15,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 
 from ..widgets.file_list import FileListWidget
+from ..widgets.progress_card import ProgressCard
 from ..widgets.toast import get_toast_manager, ToastType
+from ...utils.settings import get_settings_manager
 
 
 # 프리셋 정의
@@ -75,6 +77,7 @@ class WatermarkPage(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.worker: Any = None
+        self._settings = get_settings_manager()
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -207,6 +210,12 @@ class WatermarkPage(QWidget):
         btn_layout.addWidget(self.apply_btn)
         
         layout.addLayout(btn_layout)
+
+        # 진행률 카드 (긴 작업 UI 통일)
+        self.progress_card = ProgressCard()
+        self.progress_card.setVisible(False)
+        layout.addWidget(self.progress_card)
+
         layout.addStretch()
         
     def _on_preset_selected(self, name: str) -> None:
@@ -233,7 +242,10 @@ class WatermarkPage(QWidget):
         
     def _select_image_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "이미지 선택", "", "Images (*.png *.jpg *.jpeg *.bmp)"
+            self,
+            "이미지 선택",
+            self._settings.get("default_output_dir", ""),
+            "Images (*.png *.jpg *.jpeg *.bmp)",
         )
         if file_path:
             self.image_path_input.setText(file_path)
@@ -248,7 +260,8 @@ class WatermarkPage(QWidget):
         from PySide6.QtWidgets import QMessageBox
         reply = QMessageBox.question(
             self, "확인", "원본 파일에 덮어쓰시겠습니까?\n'No'를 선택하면 별도 폴더에 저장합니다.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.No,
         )
         
         if reply == QMessageBox.StandardButton.Cancel:
@@ -256,7 +269,8 @@ class WatermarkPage(QWidget):
             
         output_dir = None
         if reply == QMessageBox.StandardButton.No:
-            output_dir = QFileDialog.getExistingDirectory(self, "저장할 폴더 선택")
+            start = self._settings.get("default_output_dir", "")
+            output_dir = QFileDialog.getExistingDirectory(self, "저장할 폴더 선택", start)
             if not output_dir:
                 return
 
@@ -300,7 +314,8 @@ class WatermarkPage(QWidget):
         from PySide6.QtWidgets import QMessageBox
         reply = QMessageBox.question(
             self, "확인", "원본 파일에 덮어쓰시겠습니까?\n'No'를 선택하면 별도 폴더에 저장합니다.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.No,
         )
         
         if reply == QMessageBox.StandardButton.Cancel:
@@ -308,7 +323,8 @@ class WatermarkPage(QWidget):
             
         output_dir = None
         if reply == QMessageBox.StandardButton.No:
-            output_dir = QFileDialog.getExistingDirectory(self, "저장할 폴더 선택")
+            start = self._settings.get("default_output_dir", "")
+            output_dir = QFileDialog.getExistingDirectory(self, "저장할 폴더 선택", start)
             if not output_dir:
                 return
 
@@ -319,10 +335,24 @@ class WatermarkPage(QWidget):
     def _run_worker(self) -> None:
         if self.worker is None:
             return
-        self.worker.progress.connect(self._on_progress)
+
+        # 진행 카드 표시/연결
+        self.progress_card.setVisible(True)
+        self.progress_card.reset()
+        self.progress_card.set_title("워터마크 작업")
+        self.progress_card.set_status("작업 준비 중...")
+
+        try:
+            self.progress_card.cancelled.disconnect()
+        except TypeError:
+            pass
+
+        self.progress_card.cancelled.connect(self.worker.cancel)
+        self.worker.progress.connect(lambda c, t, n: (self.progress_card.set_count(c, t), self.progress_card.set_current_file(n)))
+        self.worker.status_changed.connect(self.progress_card.set_status)
         self.worker.finished_with_result.connect(self._on_finished)
         self.worker.error_occurred.connect(self._on_error)
-        
+
         self.worker.start()
         self.apply_btn.setEnabled(False)
         self.remove_btn.setEnabled(False)
@@ -334,12 +364,21 @@ class WatermarkPage(QWidget):
         self.apply_btn.setEnabled(True)
         self.remove_btn.setEnabled(True)
         
+        data = getattr(result, "data", None) or {}
+        if data.get("cancelled"):
+            self.progress_card.set_error("작업이 취소되었습니다.")
+            return
+
         if result.success:
-            count = result.data.get("success_count", 0)
-            get_toast_manager().success(f"{count}개 파일 작업 완료")
+            success_count = data.get("success_count", 0)
+            fail_count = data.get("fail_count", 0)
+            self.progress_card.set_completed(success_count, fail_count)
+            get_toast_manager().success(f"{success_count}개 파일 작업 완료")
         else:
-            get_toast_manager().error(f"오류: {result.error_message}")
+            self.progress_card.set_error(getattr(result, "error_message", None) or "오류 발생")
+            get_toast_manager().error(f"오류: {getattr(result, 'error_message', None)}")
             
     def _on_error(self, message: str) -> None:
+        self.progress_card.set_error(message)
         get_toast_manager().error(f"작업 중 오류 발생: {message}")
 

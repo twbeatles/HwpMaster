@@ -6,6 +6,7 @@ Author: HWP Master
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Optional, Any
 from dataclasses import dataclass, asdict, field
@@ -35,6 +36,13 @@ class AppSettings:
     sidebar_collapsed: bool = False
     window_width: int = 1400
     window_height: int = 900
+
+    # 하이퍼링크 검사 (네트워크/프라이버시)
+    hyperlink_external_requests_enabled: bool = True
+    hyperlink_timeout_sec: int = 5
+    # comma-separated patterns: "example.com, *.corp.local"
+    hyperlink_domain_allowlist: str = ""
+    hyperlink_privacy_notice_shown: bool = False
     
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -51,6 +59,7 @@ class SettingsManager:
     """설정 관리자"""
     
     def __init__(self, config_dir: Optional[str] = None) -> None:
+        self._logger = logging.getLogger(__name__)
         if config_dir:
             self._config_dir = Path(config_dir)
         else:
@@ -61,6 +70,32 @@ class SettingsManager:
         
         self._settings: AppSettings = AppSettings()
         self.load()
+        self._ensure_defaults()
+
+    def _ensure_defaults(self) -> None:
+        """
+        누락된 기본값 보정.
+
+        - default_output_dir가 비어있으면 Documents/HWP Master로 설정
+        - 폴더가 없으면 생성
+        """
+
+        changed = False
+
+        if not self._settings.default_output_dir:
+            self._settings.default_output_dir = str(Path.home() / "Documents" / "HWP Master")
+            changed = True
+
+        try:
+            Path(self._settings.default_output_dir).mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            # 디렉토리 생성 실패 시 빈 값으로 되돌림 (저장으로 상태 고정)
+            self._logger.warning(f"default_output_dir 생성 실패: {self._settings.default_output_dir} ({e})")
+            self._settings.default_output_dir = ""
+            changed = True
+
+        if changed:
+            self.save()
     
     @property
     def settings(self) -> AppSettings:
@@ -73,7 +108,8 @@ class SettingsManager:
                 with open(self._config_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self._settings = AppSettings.from_dict(data)
-            except Exception:
+            except Exception as e:
+                self._logger.warning(f"settings.json 로드 실패(기본값으로 초기화): {self._config_file} ({e})")
                 self._settings = AppSettings()
     
     def save(self) -> None:
@@ -81,8 +117,8 @@ class SettingsManager:
         try:
             with open(self._config_file, "w", encoding="utf-8") as f:
                 json.dump(self._settings.to_dict(), f, indent=2, ensure_ascii=False)
-        except Exception:
-            pass
+        except Exception as e:
+            self._logger.warning(f"settings.json 저장 실패: {self._config_file} ({e})")
     
     def get(self, key: str, default: Any = None) -> Any:
         """설정값 조회"""

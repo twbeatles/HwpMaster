@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Optional, Callable, Any
 from dataclasses import dataclass, field
 
+from ..utils.output_paths import resolve_output_path
+
 
 @dataclass
 class BookmarkInfo:
@@ -197,7 +199,7 @@ class BookmarkManager:
                 
                 output_path = None
                 if output_dir:
-                    output_path = str(Path(output_dir) / Path(source_path).name)
+                    output_path = resolve_output_path(output_dir, source_path)
                 
                 result = self.delete_all_bookmarks(source_path, output_path)
                 results.append(result)
@@ -236,8 +238,7 @@ class BookmarkManager:
                 if progress_callback:
                     progress_callback(idx + 1, total, Path(source_path).name)
                 
-                excel_name = f"{Path(source_path).stem}_bookmarks.xlsx"
-                excel_path = str(output_directory / excel_name)
+                excel_path = resolve_output_path(output_dir, source_path, new_ext="xlsx", suffix="_bookmarks")
                 
                 result = self.export_to_excel(source_path, excel_path)
                 results.append(result)

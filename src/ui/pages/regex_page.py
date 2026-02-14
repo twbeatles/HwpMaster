@@ -21,6 +21,8 @@ from PySide6.QtGui import QFont
 from ...core.regex_replacer import RegexReplacer, ReplacementRule
 from ..widgets.file_list import FileListWidget
 from ..widgets.progress_card import ProgressCard
+from ...utils.worker import RegexReplaceWorker, WorkerResult
+from ...utils.settings import get_settings_manager
 
 
 class PresetCard(QFrame):
@@ -71,6 +73,8 @@ class RegexPage(QWidget):
         
         self._replacer = RegexReplacer()
         self._selected_rules: list[ReplacementRule] = []
+        self._worker: Optional[RegexReplaceWorker] = None
+        self._settings = get_settings_manager()
         
         self._setup_ui()
     
@@ -353,7 +357,7 @@ class RegexPage(QWidget):
         output_dir = QFileDialog.getExistingDirectory(
             self,
             "저장 위치 선택",
-            str(Path.home() / "Documents")
+            self._settings.get("default_output_dir", str(Path.home() / "Documents"))
         )
         
         if not output_dir:
@@ -361,39 +365,60 @@ class RegexPage(QWidget):
         
         self.progress_card.setVisible(True)
         self.progress_card.set_status("치환 진행 중...")
+        self.progress_card.reset()
+        self.execute_btn.setEnabled(False)
+        self.preview_btn.setEnabled(False)
         
-        # 실제 치환 실행
-        try:
-            results = self._replacer.batch_replace(
-                files,
-                self._selected_rules,
-                output_dir,
-                progress_callback=lambda c, t, n: self.progress_card.set_count(c, t)
-            )
-            
-            # 결과 요약 (results: {파일명: {규칙명: 치환횟수}})
-            success_count = 0
-            fail_count = 0
-            total_replaced = 0
-            
-            for filename, rule_counts in results.items():
-                if "_error" in rule_counts:
-                    fail_count += 1
-                else:
-                    success_count += 1
-                    total_replaced += sum(rule_counts.values())
-            
+        # Worker로 실행 (UI 블로킹 방지)
+        if self._worker is not None:
+            try:
+                self.progress_card.cancelled.disconnect(self._worker.cancel)
+            except TypeError:
+                pass
+
+        self._worker = RegexReplaceWorker(files, self._selected_rules, output_dir)
+        self.progress_card.cancelled.connect(self._worker.cancel)
+        self._worker.progress.connect(lambda c, t, n: (self.progress_card.set_count(c, t), self.progress_card.set_current_file(n)))
+        self._worker.status_changed.connect(self.progress_card.set_status)
+        self._worker.finished_with_result.connect(self._on_execute_finished)
+        self._worker.error_occurred.connect(self._on_execute_error)
+        self._worker.start()
+
+    def _on_execute_finished(self, result: WorkerResult) -> None:
+        self.execute_btn.setEnabled(True)
+        self.preview_btn.setEnabled(True)
+
+        data = result.data or {}
+        if data.get("cancelled"):
+            self.progress_card.set_error("작업이 취소되었습니다.")
+            return
+
+        if result.success:
+            success_count = data.get("success_count", 0)
+            fail_count = data.get("fail_count", 0)
+            total_replaced = data.get("total_replaced", 0)
+            total_replaced_known = data.get("total_replaced_known", True)
+            output_dir = data.get("output_dir", "")
+
             self.progress_card.set_completed(success_count, fail_count)
-            
+            replaced_line = (
+                f"총 치환: {total_replaced}건\n"
+                if total_replaced_known
+                else f"총 치환(최소): {total_replaced}건 (정확 집계 미지원)\n"
+            )
             QMessageBox.information(
                 self,
                 "완료",
                 f"치환이 완료되었습니다.\n\n"
-                f"처리 파일: {len(files)}개 (성공: {success_count}, 실패: {fail_count})\n"
-                f"총 치환: {total_replaced}건\n"
+                f"처리 파일: {success_count + fail_count}개 (성공: {success_count}, 실패: {fail_count})\n"
+                f"{replaced_line}"
                 f"저장 위치: {output_dir}"
             )
-            
-        except Exception as e:
-            self.progress_card.set_error(str(e))
-            QMessageBox.warning(self, "오류", f"치환 중 오류가 발생했습니다:\n{e}")
+        else:
+            self.progress_card.set_error(result.error_message or "오류 발생")
+            QMessageBox.warning(self, "오류", result.error_message or "치환 중 오류가 발생했습니다.")
+
+    def _on_execute_error(self, message: str) -> None:
+        self.progress_card.set_error(message)
+        self.execute_btn.setEnabled(True)
+        self.preview_btn.setEnabled(True)

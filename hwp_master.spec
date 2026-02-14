@@ -5,9 +5,14 @@ HWP Master PyInstaller Spec File
 """
 
 import sys
+import os
 from pathlib import Path
 
 block_cipher = None
+
+# 기본은 관리자 권한을 요구하지 않음. 필요할 때만 환경변수로 켠다.
+# 예: set HWP_MASTER_UAC_ADMIN=1
+UAC_ADMIN = os.environ.get("HWP_MASTER_UAC_ADMIN", "").strip().lower() in ("1", "true", "yes", "y")
 
 # 프로젝트 루트 경로
 ROOT = Path(SPECPATH)
@@ -80,5 +85,5 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=None,
-    uac_admin=True,  # HWP 제어를 위한 관리자 권한 요청
+    uac_admin=UAC_ADMIN,
 )

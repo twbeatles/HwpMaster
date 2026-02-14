@@ -112,14 +112,22 @@ class WatermarkManager:
     def __init__(self) -> None:
         self._handler: Optional["HwpHandler"] = None
         self._logger = logging.getLogger(__name__)
+        self._owner_thread_id: Optional[int] = None
     
     def _ensure_hwp(self) -> "HwpHandler":
         """HwpHandler 인스턴스 초기화 및 반환"""
+        import threading
+
+        tid = threading.get_ident()
+        if self._handler is not None and self._owner_thread_id is not None and self._owner_thread_id != tid:
+            raise RuntimeError("WatermarkManager는 스레드 안전하지 않습니다. Worker마다 새 인스턴스를 생성하세요.")
+
         if self._handler is None:
             from .hwp_handler import HwpHandler
             handler = HwpHandler()
             handler._ensure_hwp()
             self._handler = handler
+            self._owner_thread_id = tid
         handler = self._handler
         if handler is None:
             raise RuntimeError("HWP 핸들러 초기화 실패")
@@ -139,6 +147,7 @@ class WatermarkManager:
                 self._logger.warning(f"HWP 종료 중 오류 (무시됨): {e}")
             finally:
                 self._handler = None
+                self._owner_thread_id = None
                 gc.collect()
     
     def __enter__(self):
@@ -318,7 +327,9 @@ class WatermarkManager:
                 
                 # 출력 경로 결정
                 if output_dir:
-                    output_path = str(Path(output_dir) / Path(source_path).name)
+                    from ..utils.output_paths import resolve_output_path
+
+                    output_path = resolve_output_path(output_dir, source_path)
                 else:
                     output_path = None
                 

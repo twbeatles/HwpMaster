@@ -17,6 +17,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
 from ...core.doc_diff import DocDiff, ChangeType
+from ..widgets.progress_card import ProgressCard
+from ...utils.worker import DocDiffWorker, WorkerResult
+from ...utils.settings import get_settings_manager
 
 
 class DocDiffPage(QWidget):
@@ -28,6 +31,8 @@ class DocDiffPage(QWidget):
         self._doc_diff = DocDiff()
         self._file1_path: Optional[str] = None
         self._file2_path: Optional[str] = None
+        self._worker: Optional[DocDiffWorker] = None
+        self._settings = get_settings_manager()
         
         self._setup_ui()
     
@@ -110,6 +115,11 @@ class DocDiffPage(QWidget):
         result_layout.addWidget(self.diff_text)
         
         layout.addWidget(result_group)
+
+        # 진행률 카드
+        self.progress_card = ProgressCard()
+        self.progress_card.setVisible(False)
+        layout.addWidget(self.progress_card)
         
         # 버튼
         btn_layout = QHBoxLayout()
@@ -132,7 +142,10 @@ class DocDiffPage(QWidget):
     
     def _select_file1(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "원본 파일 선택", "", "HWP 파일 (*.hwp *.hwpx)"
+            self,
+            "원본 파일 선택",
+            self._settings.get("default_output_dir", ""),
+            "HWP 파일 (*.hwp *.hwpx)",
         )
         if file_path:
             self._file1_path = file_path
@@ -141,7 +154,10 @@ class DocDiffPage(QWidget):
     
     def _select_file2(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "수정 파일 선택", "", "HWP 파일 (*.hwp *.hwpx)"
+            self,
+            "수정 파일 선택",
+            self._settings.get("default_output_dir", ""),
+            "HWP 파일 (*.hwp *.hwpx)",
         )
         if file_path:
             self._file2_path = file_path
@@ -152,32 +168,64 @@ class DocDiffPage(QWidget):
         if not self._file1_path or not self._file2_path:
             QMessageBox.warning(self, "오류", "두 파일을 모두 선택해주세요.")
             return
-        
-        result = self._doc_diff.compare(self._file1_path, self._file2_path)
-        self._last_result = result
-        
-        if not result.success:
-            QMessageBox.warning(self, "오류", f"비교 실패:\n{result.error_message}")
+
+        # Worker 실행
+        if self._worker is not None:
+            try:
+                self.progress_card.cancelled.disconnect(self._worker.cancel)
+            except TypeError:
+                pass
+
+        self.compare_btn.setEnabled(False)
+        self.export_btn.setEnabled(False)
+        self.progress_card.setVisible(True)
+        self.progress_card.reset()
+        self.progress_card.set_status("비교 준비 중...")
+
+        self._worker = DocDiffWorker(self._file1_path, self._file2_path)
+        self.progress_card.cancelled.connect(self._worker.cancel)
+        self._worker.progress.connect(lambda c, t, n: (self.progress_card.set_count(c, t), self.progress_card.set_current_file(n)))
+        self._worker.status_changed.connect(self.progress_card.set_status)
+        self._worker.finished_with_result.connect(self._on_compare_finished)
+        self._worker.error_occurred.connect(self._on_compare_error)
+        self._worker.start()
+
+    def _on_compare_finished(self, result: WorkerResult) -> None:
+        self.compare_btn.setEnabled(True)
+
+        data = result.data or {}
+        if data.get("cancelled"):
+            self.progress_card.set_error("작업이 취소되었습니다.")
             return
-        
+
+        diff_result = data.get("result")
+        self._last_result = diff_result
+
+        if not result.success or diff_result is None or not getattr(diff_result, "success", False):
+            self.progress_card.set_error(getattr(diff_result, "error_message", None) or result.error_message or "오류 발생")
+            QMessageBox.warning(self, "오류", f"비교 실패:\n{getattr(diff_result, 'error_message', None) or result.error_message}")
+            return
+
+        self.progress_card.set_completed(1, 0)
+
         # 통계 표시
         self.stats_label.setText(
             f"📊 비교 완료\n\n"
-            f"원본: {result.file1_lines}줄  |  수정본: {result.file2_lines}줄\n"
-            f"추가: +{result.added_count}  |  삭제: -{result.deleted_count}  |  "
-            f"수정: ~{result.modified_count}\n"
-            f"유사도: {result.similarity_ratio * 100:.1f}%"
+            f"원본: {diff_result.file1_lines}줄  |  수정본: {diff_result.file2_lines}줄\n"
+            f"추가: +{diff_result.added_count}  |  삭제: -{diff_result.deleted_count}  |  "
+            f"수정: ~{diff_result.modified_count}\n"
+            f"유사도: {diff_result.similarity_ratio * 100:.1f}%"
         )
-        
+
         # 변경 내역 표시
-        diff_lines = []
-        for change in result.changes[:50]:
+        diff_lines: list[str] = []
+        for change in diff_result.changes[:50]:
             symbol = {
                 ChangeType.ADDED: "+",
                 ChangeType.DELETED: "-",
-                ChangeType.MODIFIED: "~"
+                ChangeType.MODIFIED: "~",
             }.get(change.change_type, " ")
-            
+
             if change.change_type == ChangeType.ADDED:
                 diff_lines.append(f"[{change.line_number:4d}] {symbol} {change.new_text}")
             elif change.change_type == ChangeType.DELETED:
@@ -185,12 +233,16 @@ class DocDiffPage(QWidget):
             else:
                 diff_lines.append(f"[{change.line_number:4d}] {symbol} {change.original_text}")
                 diff_lines.append(f"       → {change.new_text}")
-        
-        if len(result.changes) > 50:
-            diff_lines.append(f"\n... 외 {len(result.changes) - 50}건")
-        
+
+        if len(diff_result.changes) > 50:
+            diff_lines.append(f"\n... 외 {len(diff_result.changes) - 50}건")
+
         self.diff_text.setPlainText("\n".join(diff_lines) if diff_lines else "변경 내역 없음")
         self.export_btn.setEnabled(True)
+
+    def _on_compare_error(self, message: str) -> None:
+        self.compare_btn.setEnabled(True)
+        self.progress_card.set_error(message)
     
     def _export_report(self) -> None:
         if not self._last_result:
@@ -199,7 +251,7 @@ class DocDiffPage(QWidget):
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "리포트 저장",
-            str(Path.home() / "Documents" / "diff_report.html"),
+            str(Path(self._settings.get("default_output_dir", str(Path.home() / "Documents"))) / "diff_report.html"),
             "HTML 파일 (*.html);;텍스트 파일 (*.txt)"
         )
         

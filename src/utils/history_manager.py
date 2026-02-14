@@ -6,6 +6,7 @@ Author: HWP Master
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Optional, Any
 from dataclasses import dataclass, asdict, field
@@ -58,6 +59,7 @@ class HistoryManager:
     MAX_HISTORY = 100
     
     def __init__(self, config_dir: Optional[str] = None) -> None:
+        self._logger = logging.getLogger(__name__)
         if config_dir:
             self._config_dir = Path(config_dir)
         else:
@@ -75,7 +77,8 @@ class HistoryManager:
                 with open(self._history_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self._history = [HistoryItem(**item) for item in data]
-            except Exception:
+            except Exception as e:
+                self._logger.warning(f"history.json 로드 실패(초기화): {self._history_file} ({e})")
                 self._history = []
     
     def save(self) -> None:
@@ -84,8 +87,8 @@ class HistoryManager:
             with open(self._history_file, "w", encoding="utf-8") as f:
                 data = [asdict(item) for item in self._history]
                 json.dump(data, f, indent=2, ensure_ascii=False)
-        except Exception:
-            pass
+        except Exception as e:
+            self._logger.warning(f"history.json 저장 실패: {self._history_file} ({e})")
     
     def add(
         self,

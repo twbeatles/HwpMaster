@@ -1,0 +1,727 @@
+/*
+ * HWP Master - Modern Dark Theme v2.0
+ * Fluent Design + Glassmorphism Inspired
+ */
+
+/* ==================== Global ==================== */
+* {
+    font-family: "Segoe UI", "Malgun Gothic", sans-serif;
+    font-size: 13px;
+}
+
+QMainWindow {
+    background-color: {{background}};
+}
+
+QWidget {
+    background-color: {{background}};
+    color: {{text_primary}};
+}
+
+/* ==================== Sidebar ==================== */
+#sidebar {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 {{surface}}, stop:1 {{background}});
+    border-right: 1px solid {{border}};
+}
+
+#sidebar QLabel {
+    background: transparent;
+}
+
+#sidebar QPushButton {
+    background-color: transparent;
+    border: none;
+    border-radius: 10px;
+    padding: 14px 18px;
+    text-align: left;
+    color: {{text_secondary}};
+    margin: 2px 10px;
+    font-weight: 500;
+}
+
+#sidebar QPushButton:hover {
+    background-color: {{accent_rgba_10}};
+    color: {{accent}};
+}
+
+#sidebar QPushButton:checked {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {{primary_rgba_30}}, stop:1 {{accent_rgba_20}});
+    color: {{white}};
+    border-left: 3px solid {{primary}};
+}
+
+#sidebar QPushButton:pressed {
+    background-color: {{primary_rgba_40}};
+}
+
+/* Sidebar Section Label */
+.sidebar-section {
+    color: {{text_muted}};
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 16px 18px 8px 18px;
+}
+
+/* ==================== Cards ==================== */
+.card {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 {{surface}}, stop:1 {{surface_alt}});
+    border: 1px solid {{border}};
+    border-radius: 16px;
+    padding: 24px;
+}
+
+.card:hover {
+    border-color: {{primary}};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 {{surface_alt}}, stop:1 {{surface_muted}});
+}
+
+.card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: {{white}};
+    margin-bottom: 8px;
+}
+
+.card-description {
+    font-size: 13px;
+    color: {{text_secondary}};
+    line-height: 1.5;
+}
+
+.card-icon {
+    font-size: 28px;
+    margin-bottom: 12px;
+}
+
+/* Glassmorphism Card */
+.glass-card {
+    background: {{surface_rgba_80}};
+    border: 1px solid {{border_rgba_60}};
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+}
+
+/* ==================== Buttons ==================== */
+QPushButton {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {{primary}}, stop:1 {{primary2}});
+    border: none;
+    border-radius: 10px;
+    padding: 12px 24px;
+    color: {{white}};
+    font-weight: 600;
+    min-height: 20px;
+}
+
+QPushButton:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {{primary_light}}, stop:1 {{primary}});
+}
+
+QPushButton:pressed {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {{primary2}}, stop:1 {{primary_dark}});
+}
+
+QPushButton:disabled {
+    background-color: {{surface_muted}};
+    color: {{text_muted}};
+}
+
+/* Secondary Button */
+QPushButton[class="secondary"] {
+    background: transparent;
+    border: 1px solid {{border}};
+    color: {{text_secondary}};
+}
+
+QPushButton[class="secondary"]:hover {
+    background: {{text_secondary_rgba_10}};
+    border-color: {{text_secondary}};
+    color: {{text_primary}};
+}
+
+/* Success Button */
+QPushButton[class="success"] {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {{success_dark}}, stop:1 {{success_mid}});
+}
+
+QPushButton[class="success"]:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {{success_mid}}, stop:1 {{success}});
+}
+
+/* Danger Button */
+QPushButton[class="danger"] {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {{error_dark}}, stop:1 {{error}});
+}
+
+/* Icon Button */
+QPushButton[class="icon-btn"] {
+    background: transparent;
+    border: 1px solid {{border}};
+    border-radius: 8px;
+    padding: 8px;
+    min-width: 36px;
+    max-width: 36px;
+    min-height: 36px;
+    max-height: 36px;
+}
+
+QPushButton[class="icon-btn"]:hover {
+    background: {{text_secondary_rgba_15}};
+    border-color: {{text_secondary}};
+}
+
+/* ==================== Input Fields ==================== */
+QLineEdit, QTextEdit, QPlainTextEdit {
+    background-color: {{background}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: {{text_primary}};
+    selection-background-color: {{primary}};
+}
+
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
+    border-color: {{primary}};
+    background-color: {{surface}};
+}
+
+QLineEdit:hover, QTextEdit:hover {
+    border-color: {{text_muted}};
+}
+
+QLineEdit::placeholder {
+    color: {{text_muted}};
+}
+
+/* ==================== ComboBox ==================== */
+QComboBox {
+    background-color: {{surface}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+    padding: 10px 16px;
+    color: {{text_primary}};
+    min-width: 140px;
+}
+
+QComboBox:hover {
+    border-color: {{primary}};
+}
+
+QComboBox:focus {
+    border-color: {{primary}};
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 32px;
+}
+
+QComboBox::down-arrow {
+    image: none;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid {{text_secondary}};
+    margin-right: 10px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: {{surface}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+    padding: 6px;
+    selection-background-color: {{primary}};
+    outline: none;
+}
+
+QComboBox QAbstractItemView::item {
+    padding: 10px 16px;
+    border-radius: 6px;
+}
+
+QComboBox QAbstractItemView::item:hover {
+    background-color: {{primary_rgba_20}};
+}
+
+/* ==================== SpinBox ==================== */
+QSpinBox, QDoubleSpinBox {
+    background-color: {{surface}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+    padding: 10px 16px;
+    color: {{text_primary}};
+}
+
+QSpinBox:hover, QDoubleSpinBox:hover {
+    border-color: {{text_muted}};
+}
+
+QSpinBox:focus, QDoubleSpinBox:focus {
+    border-color: {{primary}};
+}
+
+QSpinBox::up-button, QDoubleSpinBox::up-button,
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    background: transparent;
+    border: none;
+    width: 20px;
+}
+
+/* ==================== Progress Bar ==================== */
+QProgressBar {
+    background-color: {{surface_muted}};
+    border: none;
+    border-radius: 8px;
+    height: 16px;
+    text-align: center;
+    color: {{white}};
+    font-size: 11px;
+    font-weight: 600;
+}
+
+QProgressBar::chunk {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {{primary}}, stop:0.5 {{primary_light}}, stop:1 {{primary}});
+    border-radius: 8px;
+}
+
+/* ==================== Scroll Bar ==================== */
+QScrollBar:vertical {
+    background-color: transparent;
+    width: 12px;
+    margin: 4px 2px;
+    border-radius: 6px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: {{border}};
+    min-height: 40px;
+    border-radius: 6px;
+    margin: 2px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: {{primary}};
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+    background: none;
+}
+
+QScrollBar:horizontal {
+    background-color: transparent;
+    height: 12px;
+    margin: 2px 4px;
+    border-radius: 6px;
+}
+
+QScrollBar::handle:horizontal {
+    background-color: {{border}};
+    min-width: 40px;
+    border-radius: 6px;
+    margin: 2px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background-color: {{primary}};
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0;
+    background: none;
+}
+
+/* ==================== List Widget ==================== */
+QListWidget {
+    background-color: {{background}};
+    border: 1px solid {{border}};
+    border-radius: 12px;
+    padding: 8px;
+    outline: none;
+}
+
+QListWidget::item {
+    background-color: {{surface}};
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 4px 2px;
+    color: {{text_primary}};
+}
+
+QListWidget::item:hover {
+    background-color: {{surface_muted}};
+    border-color: {{border}};
+}
+
+QListWidget::item:selected {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {{primary_rgba_30}}, stop:1 {{primary_rgba_10}});
+    border-color: {{primary}};
+    color: {{white}};
+}
+
+/* ==================== Tree Widget ==================== */
+QTreeWidget {
+    background-color: {{background}};
+    border: 1px solid {{border}};
+    border-radius: 12px;
+    padding: 8px;
+    outline: none;
+}
+
+QTreeWidget::item {
+    padding: 8px 12px;
+    border-radius: 6px;
+}
+
+QTreeWidget::item:hover {
+    background-color: {{surface_muted}};
+}
+
+QTreeWidget::item:selected {
+    background-color: {{primary_rgba_30}};
+}
+
+QTreeWidget::branch {
+    background: transparent;
+}
+
+QHeaderView::section {
+    background-color: {{surface}};
+    color: {{text_secondary}};
+    padding: 10px 16px;
+    border: none;
+    border-bottom: 1px solid {{border}};
+    font-weight: 600;
+}
+
+/* ==================== Labels ==================== */
+QLabel {
+    color: {{text_primary}};
+    background-color: transparent;
+}
+
+QLabel[class="title"] {
+    font-size: 28px;
+    font-weight: 700;
+    color: {{white}};
+}
+
+QLabel[class="subtitle"] {
+    font-size: 15px;
+    color: {{text_secondary}};
+}
+
+QLabel[class="accent"] {
+    color: {{primary_light}};
+}
+
+QLabel[class="muted"] {
+    color: {{text_muted}};
+}
+
+/* ==================== GroupBox ==================== */
+QGroupBox {
+    background-color: {{surface}};
+    border: 1px solid {{border}};
+    border-radius: 12px;
+    margin-top: 16px;
+    padding: 24px 16px 16px 16px;
+    font-weight: 600;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 16px;
+    top: 4px;
+    color: {{text_secondary}};
+    background-color: {{surface}};
+    padding: 0 8px;
+}
+
+/* ==================== ToolTip ==================== */
+QToolTip {
+    background-color: {{surface_alt}};
+    border: 1px solid {{border}};
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: {{text_primary}};
+    font-size: 12px;
+}
+
+/* ==================== Menu ==================== */
+QMenuBar {
+    background-color: {{surface}};
+    border-bottom: 1px solid {{border}};
+    padding: 4px 8px;
+}
+
+QMenuBar::item {
+    background-color: transparent;
+    padding: 8px 16px;
+    border-radius: 6px;
+    color: {{text_secondary}};
+}
+
+QMenuBar::item:selected {
+    background-color: {{surface_muted}};
+    color: {{text_primary}};
+}
+
+QMenu {
+    background-color: {{surface}};
+    border: 1px solid {{border}};
+    border-radius: 12px;
+    padding: 8px;
+}
+
+QMenu::item {
+    padding: 10px 32px 10px 16px;
+    border-radius: 6px;
+    color: {{text_primary}};
+}
+
+QMenu::item:selected {
+    background-color: {{primary_rgba_30}};
+}
+
+QMenu::separator {
+    height: 1px;
+    background-color: {{border}};
+    margin: 8px 12px;
+}
+
+/* ==================== Tab Widget ==================== */
+QTabWidget::pane {
+    border: 1px solid {{border}};
+    border-radius: 12px;
+    background-color: {{surface}};
+    padding: 16px;
+}
+
+QTabBar::tab {
+    background-color: transparent;
+    border: none;
+    padding: 12px 24px;
+    margin-right: 4px;
+    border-radius: 8px 8px 0 0;
+    color: {{text_secondary}};
+    font-weight: 500;
+}
+
+QTabBar::tab:selected {
+    background-color: {{surface}};
+    color: {{white}};
+    border-bottom: 2px solid {{primary}};
+}
+
+QTabBar::tab:hover:!selected {
+    background-color: {{text_secondary_rgba_10}};
+    color: {{text_primary}};
+}
+
+/* ==================== CheckBox ==================== */
+QCheckBox {
+    spacing: 10px;
+    color: {{text_primary}};
+}
+
+QCheckBox::indicator {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    border: 2px solid {{border}};
+    background-color: {{background}};
+}
+
+QCheckBox::indicator:hover {
+    border-color: {{primary}};
+}
+
+QCheckBox::indicator:checked {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 {{primary}}, stop:1 {{primary2}});
+    border-color: {{primary}};
+}
+
+/* ==================== Radio Button ==================== */
+QRadioButton {
+    spacing: 10px;
+    color: {{text_primary}};
+}
+
+QRadioButton::indicator {
+    width: 20px;
+    height: 20px;
+    border-radius: 10px;
+    border: 2px solid {{border}};
+    background-color: {{background}};
+}
+
+QRadioButton::indicator:hover {
+    border-color: {{primary}};
+}
+
+QRadioButton::indicator:checked {
+    background-color: {{primary}};
+    border-color: {{primary}};
+}
+
+/* ==================== Drop Zone ==================== */
+#dropZone {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 {{surface}}, stop:1 {{background}});
+    border: 2px dashed {{border}};
+    border-radius: 16px;
+    min-height: 160px;
+}
+
+#dropZone:hover {
+    border-color: {{primary}};
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 {{primary_rgba_10}}, stop:1 {{primary_rgba_05}});
+}
+
+#dropZone QLabel {
+    color: {{text_secondary}};
+    font-size: 15px;
+}
+
+#dropZone .drop-icon {
+    font-size: 48px;
+    color: {{primary}};
+}
+
+/* ==================== Toast Notifications ==================== */
+#toast {
+    background-color: {{surface_alt}};
+    border: 1px solid {{border}};
+    border-radius: 12px;
+    padding: 16px 24px;
+    min-width: 300px;
+}
+
+#toast[class="success"] {
+    border-left: 4px solid {{success}};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {{success_rgba_15}}, stop:1 {{surface_alt}});
+}
+
+#toast[class="error"] {
+    border-left: 4px solid {{error}};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {{error_rgba_15}}, stop:1 {{surface_alt}});
+}
+
+#toast[class="warning"] {
+    border-left: 4px solid {{warning}};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {{warning_rgba_15}}, stop:1 {{surface_alt}});
+}
+
+#toast[class="info"] {
+    border-left: 4px solid {{accent}};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {{accent_rgba_15}}, stop:1 {{surface_alt}});
+}
+
+/* ==================== Page Header ==================== */
+#pageHeader {
+    background: transparent;
+    padding: 0 0 24px 0;
+    border-bottom: 1px solid {{surface_muted}};
+    margin-bottom: 24px;
+}
+
+#pageHeader .title {
+    font-size: 28px;
+    font-weight: 700;
+    color: {{white}};
+}
+
+#pageHeader .subtitle {
+    font-size: 15px;
+    color: {{text_secondary}};
+    margin-top: 4px;
+}
+
+/* ==================== Status Badges ==================== */
+.badge {
+    background-color: {{surface_muted}};
+    border-radius: 12px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.badge-success {
+    background-color: {{success_rgba_20}};
+    color: {{success}};
+}
+
+.badge-warning {
+    background-color: {{warning_rgba_20}};
+    color: {{warning}};
+}
+
+.badge-error {
+    background-color: {{error_rgba_20}};
+    color: {{error}};
+}
+
+.badge-info {
+    background-color: {{accent_rgba_20}};
+    color: {{accent}};
+}
+
+/* ==================== Splitter ==================== */
+QSplitter::handle {
+    background-color: {{border}};
+}
+
+QSplitter::handle:horizontal {
+    width: 2px;
+}
+
+QSplitter::handle:vertical {
+    height: 2px;
+}
+
+QSplitter::handle:hover {
+    background-color: {{primary}};
+}
+
+/* ==================== Dialog ==================== */
+QDialog {
+    background-color: {{background}};
+    border: 1px solid {{border}};
+    border-radius: 16px;
+}
+
+QDialogButtonBox QPushButton {
+    min-width: 100px;
+}
+
+/* ==================== Message Box ==================== */
+QMessageBox {
+    background-color: {{surface}};
+}
+
+QMessageBox QLabel {
+    color: {{text_primary}};
+    font-size: 14px;
+    min-width: 300px;
+}

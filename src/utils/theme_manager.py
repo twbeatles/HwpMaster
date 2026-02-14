@@ -7,21 +7,96 @@ Author: HWP Master
 
 from typing import Optional
 from dataclasses import dataclass
+import re
 
 
 @dataclass
 class ThemeColors:
     """테마 색상"""
     primary: str = "#8957e5"
+    primary2: str = "#6e40c9"
+    primary_light: str = "#a371f7"
+    primary_dark: str = "#553098"
     secondary: str = "#238636"
     background: str = "#0d1117"
     surface: str = "#161b22"
+    surface_alt: str = "#1c2128"
+    surface_muted: str = "#21262d"
     border: str = "#30363d"
     text_primary: str = "#e6edf3"
     text_secondary: str = "#8b949e"
+    text_muted: str = "#484f58"
+    accent: str = "#58a6ff"
     success: str = "#3fb950"
+    success_mid: str = "#2ea043"
+    success_dark: str = "#238636"
     error: str = "#f85149"
+    error_dark: str = "#da3633"
     warning: str = "#d29922"
+    white: str = "#ffffff"
+
+    def to_tokens(self) -> dict[str, str]:
+        """
+        QSS 템플릿 토큰 dict로 변환.
+
+        - hex 색상 토큰: 그대로 사용 (#RRGGBB)
+        - rgba 토큰: 템플릿에서 rgba(...) 형태로 사용
+        """
+
+        def hex_to_rgb(h: str) -> tuple[int, int, int]:
+            m = re.fullmatch(r"#([0-9a-fA-F]{6})", h)
+            if not m:
+                raise ValueError(f"잘못된 HEX 색상: {h}")
+            v = m.group(1)
+            return int(v[0:2], 16), int(v[2:4], 16), int(v[4:6], 16)
+
+        def rgba(hex_color: str, alpha: float) -> str:
+            r, g, b = hex_to_rgb(hex_color)
+            return f"rgba({r}, {g}, {b}, {alpha})"
+
+        tokens: dict[str, str] = {
+            "primary": self.primary,
+            "primary2": self.primary2,
+            "primary_light": self.primary_light,
+            "primary_dark": self.primary_dark,
+            "secondary": self.secondary,
+            "background": self.background,
+            "surface": self.surface,
+            "surface_alt": self.surface_alt,
+            "surface_muted": self.surface_muted,
+            "border": self.border,
+            "text_primary": self.text_primary,
+            "text_secondary": self.text_secondary,
+            "text_muted": self.text_muted,
+            "accent": self.accent,
+            "success": self.success,
+            "success_mid": self.success_mid,
+            "success_dark": self.success_dark,
+            "error": self.error,
+            "error_dark": self.error_dark,
+            "warning": self.warning,
+            "white": self.white,
+            # Common rgba variants used by style.template.qss
+            "primary_rgba_05": rgba(self.primary, 0.05),
+            "primary_rgba_10": rgba(self.primary, 0.1),
+            "primary_rgba_20": rgba(self.primary, 0.2),
+            "primary_rgba_30": rgba(self.primary, 0.3),
+            "primary_rgba_40": rgba(self.primary, 0.4),
+            "accent_rgba_10": rgba(self.accent, 0.1),
+            "accent_rgba_15": rgba(self.accent, 0.15),
+            "accent_rgba_20": rgba(self.accent, 0.2),
+            "text_secondary_rgba_10": rgba(self.text_secondary, 0.1),
+            "text_secondary_rgba_15": rgba(self.text_secondary, 0.15),
+            "surface_rgba_80": rgba(self.surface, 0.8),
+            "border_rgba_60": rgba(self.border, 0.6),
+            "success_rgba_15": rgba(self.success, 0.15),
+            "success_rgba_20": rgba(self.success, 0.2),
+            "error_rgba_15": rgba(self.error, 0.15),
+            "error_rgba_20": rgba(self.error, 0.2),
+            "warning_rgba_15": rgba(self.warning, 0.15),
+            "warning_rgba_20": rgba(self.warning, 0.2),
+        }
+        return tokens
 
 
 # 프리셋 테마
@@ -29,27 +104,62 @@ THEME_PRESETS: dict[str, ThemeColors] = {
     "Dark (기본)": ThemeColors(),
     "Dark Purple": ThemeColors(
         primary="#a855f7",
+        primary2="#7c3aed",
+        primary_light="#c084fc",
+        primary_dark="#5b21b6",
         background="#0f0a1a",
-        surface="#1a1025"
+        surface="#1a1025",
+        surface_alt="#221333",
+        surface_muted="#2a1a3f",
+        border="#3a2756",
+        accent="#60a5fa",
     ),
     "Dark Blue": ThemeColors(
         primary="#3b82f6",
+        primary2="#2563eb",
+        primary_light="#60a5fa",
+        primary_dark="#1d4ed8",
         background="#0a0f1a",
-        surface="#101825"
+        surface="#101825",
+        surface_alt="#141f33",
+        surface_muted="#19243a",
+        border="#26344d",
+        accent="#58a6ff",
     ),
     "Dark Green": ThemeColors(
         primary="#22c55e",
+        primary2="#16a34a",
+        primary_light="#4ade80",
+        primary_dark="#15803d",
         secondary="#8957e5",
         background="#0a1a0f",
-        surface="#102518"
+        surface="#102518",
+        surface_alt="#142f20",
+        surface_muted="#193624",
+        border="#244a32",
+        accent="#58a6ff",
     ),
     "Light": ThemeColors(
         primary="#7c3aed",
+        primary2="#6d28d9",
+        primary_light="#8b5cf6",
+        primary_dark="#5b21b6",
         background="#ffffff",
         surface="#f8fafc",
+        surface_alt="#f1f5f9",
+        surface_muted="#e2e8f0",
         border="#e2e8f0",
         text_primary="#1e293b",
-        text_secondary="#64748b"
+        text_secondary="#64748b",
+        text_muted="#94a3b8",
+        accent="#2563eb",
+        success="#16a34a",
+        success_mid="#22c55e",
+        success_dark="#15803d",
+        error="#dc2626",
+        error_dark="#b91c1c",
+        warning="#d97706",
+        white="#ffffff",
     ),
 }
 

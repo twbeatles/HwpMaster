@@ -18,6 +18,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
 from ...core.smart_toc import SmartTOC, TocEntry
+from ..widgets.progress_card import ProgressCard
+from ...utils.worker import SmartTocWorker, WorkerResult
+from ...utils.settings import get_settings_manager
 
 
 class SmartTocPage(QWidget):
@@ -29,6 +32,8 @@ class SmartTocPage(QWidget):
         self._smart_toc = SmartTOC()
         self._file_path: Optional[str] = None
         self._last_result = None
+        self._worker: Optional[SmartTocWorker] = None
+        self._settings = get_settings_manager()
         
         self._setup_ui()
     
@@ -79,6 +84,11 @@ class SmartTocPage(QWidget):
         toc_layout.addWidget(self.stats_label)
         
         layout.addWidget(toc_group)
+
+        # 진행률 카드
+        self.progress_card = ProgressCard()
+        self.progress_card.setVisible(False)
+        layout.addWidget(self.progress_card)
         
         # 버튼
         btn_layout = QHBoxLayout()
@@ -103,7 +113,10 @@ class SmartTocPage(QWidget):
     
     def _select_file(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "파일 선택", "", "HWP 파일 (*.hwp *.hwpx)"
+            self,
+            "파일 선택",
+            self._settings.get("default_output_dir", ""),
+            "HWP 파일 (*.hwp *.hwpx)",
         )
         if file_path:
             self._file_path = file_path
@@ -114,39 +127,71 @@ class SmartTocPage(QWidget):
         if not self._file_path:
             QMessageBox.warning(self, "오류", "파일을 선택해주세요.")
             return
-        
-        result = self._smart_toc.extract_toc(self._file_path)
-        self._last_result = result
-        
-        if not result.success:
-            QMessageBox.warning(self, "오류", f"목차 추출 실패:\n{result.error_message}")
+
+        if self._worker is not None:
+            try:
+                self.progress_card.cancelled.disconnect(self._worker.cancel)
+            except TypeError:
+                pass
+
+        self.extract_btn.setEnabled(False)
+        self.save_btn.setEnabled(False)
+        self.insert_btn.setEnabled(False)
+
+        self.progress_card.setVisible(True)
+        self.progress_card.reset()
+        self.progress_card.set_status("목차 추출 중...")
+
+        self._worker = SmartTocWorker(self._file_path)
+        self.progress_card.cancelled.connect(self._worker.cancel)
+        self._worker.progress.connect(lambda c, t, n: (self.progress_card.set_count(c, t), self.progress_card.set_current_file(n)))
+        self._worker.status_changed.connect(self.progress_card.set_status)
+        self._worker.finished_with_result.connect(self._on_extract_finished)
+        self._worker.error_occurred.connect(self._on_extract_error)
+        self._worker.start()
+
+    def _on_extract_finished(self, result: WorkerResult) -> None:
+        self.extract_btn.setEnabled(True)
+
+        data = result.data or {}
+        if data.get("cancelled"):
+            self.progress_card.set_error("작업이 취소되었습니다.")
             return
-        
+
+        toc_result = data.get("result")
+        self._last_result = toc_result
+
+        if not result.success or toc_result is None or not getattr(toc_result, "success", False):
+            self.progress_card.set_error(getattr(toc_result, "error_message", None) or result.error_message or "오류 발생")
+            QMessageBox.warning(self, "오류", f"목차 추출 실패:\n{getattr(toc_result, 'error_message', None) or result.error_message}")
+            return
+
+        self.progress_card.set_completed(1, 0)
+
         # 트리 표시
         self.toc_tree.clear()
-        
-        for entry in result.entries:
+        for entry in toc_result.entries:
             item = QTreeWidgetItem([
                 entry.text,
                 f"H{entry.level}",
-                str(entry.line_number)
+                str(entry.line_number),
             ])
             self.toc_tree.addTopLevelItem(item)
-        
-        # 통계
-        h1 = len(result.get_by_level(1))
-        h2 = len(result.get_by_level(2))
-        h3 = len(result.get_by_level(3))
-        
-        self.stats_label.setText(
-            f"총 {result.total_entries}개 항목 (H1: {h1}, H2: {h2}, H3: {h3})"
-        )
-        
+
+        h1 = len(toc_result.get_by_level(1))
+        h2 = len(toc_result.get_by_level(2))
+        h3 = len(toc_result.get_by_level(3))
+        self.stats_label.setText(f"총 {toc_result.total_entries}개 항목 (H1: {h1}, H2: {h2}, H3: {h3})")
+
         self.save_btn.setEnabled(True)
         self.insert_btn.setEnabled(True)
-        
-        if result.total_entries == 0:
+
+        if toc_result.total_entries == 0:
             QMessageBox.information(self, "알림", "문서에서 목차 항목을 찾지 못했습니다.")
+
+    def _on_extract_error(self, message: str) -> None:
+        self.extract_btn.setEnabled(True)
+        self.progress_card.set_error(message)
     
     def _save_toc(self) -> None:
         if not self._last_result:
@@ -155,7 +200,7 @@ class SmartTocPage(QWidget):
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "목차 저장",
-            str(Path.home() / "Documents" / "toc.txt"),
+            str(Path(self._settings.get("default_output_dir", str(Path.home() / "Documents"))) / "toc.txt"),
             "텍스트 파일 (*.txt);;HTML 파일 (*.html)"
         )
         

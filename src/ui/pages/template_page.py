@@ -18,6 +18,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
 from ...core.template_store import TemplateStore, TemplateInfo
+from ...utils.settings import get_settings_manager
 
 
 class TemplateCard(QFrame):
@@ -193,10 +194,11 @@ class AddTemplateDialog(QDialog):
         layout.addLayout(btn_layout)
     
     def _browse_file(self) -> None:
+        default_dir = get_settings_manager().get("default_output_dir", "")
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "템플릿 파일 선택",
-            "",
+            default_dir,
             "HWP 파일 (*.hwp *.hwpx)"
         )
         if file_path:
@@ -221,6 +223,7 @@ class TemplatePage(QWidget):
         
         self._store = TemplateStore()
         self._current_category = "전체"
+        self._settings = get_settings_manager()
         
         self._setup_ui()
         self._load_templates()
@@ -337,11 +340,38 @@ class TemplatePage(QWidget):
         """템플릿 클릭"""
         template = self._store.get_template(template_id)
         if template:
+            # 내장 템플릿이지만 파일이 없으면 먼저 등록 플로우로 유도 (README 가이드와 정합)
+            if template.is_builtin and (not template.file_path or not Path(template.file_path).exists()):
+                QMessageBox.information(
+                    self,
+                    "파일 등록 필요",
+                    f"'{template.name}' 템플릿을 사용하려면 HWP 파일을 먼저 등록해야 합니다.",
+                )
+                hwp_path, _ = QFileDialog.getOpenFileName(
+                    self,
+                    "템플릿 파일 선택",
+                    self._settings.get("default_output_dir", str(Path.home() / "Documents")),
+                    "HWP 파일 (*.hwp *.hwpx)",
+                )
+                if not hwp_path:
+                    return
+
+                ok = self._store.register_builtin_template_file(template_id, hwp_path)
+                if not ok:
+                    QMessageBox.warning(self, "오류", "템플릿 파일 등록에 실패했습니다.")
+                    return
+
+                self._load_templates()
+                template = self._store.get_template(template_id)
+                if template is None or not template.file_path:
+                    QMessageBox.warning(self, "오류", "템플릿 등록 후 정보를 불러오지 못했습니다.")
+                    return
+
             # 출력 경로 선택
             file_path, _ = QFileDialog.getSaveFileName(
                 self,
                 "저장 위치 선택",
-                str(Path.home() / "Documents" / f"{template.name}.hwp"),
+                str(Path(self._settings.get("default_output_dir", str(Path.home() / "Documents"))) / f"{template.name}.hwp"),
                 "HWP 파일 (*.hwp)"
             )
             

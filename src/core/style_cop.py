@@ -304,7 +304,9 @@ class StyleCop:
                 progress_callback(idx, total, filename)
             
             if output_dir:
-                output_path = str(Path(output_dir) / filename)
+                from ..utils.output_paths import resolve_output_path
+
+                output_path = resolve_output_path(output_dir, file_path)
             else:
                 output_path = None
             

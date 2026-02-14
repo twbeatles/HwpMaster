@@ -19,6 +19,9 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QColor
 
 from ...core.macro_recorder import MacroRecorder, MacroInfo, MacroAction
+from ..widgets.progress_card import ProgressCard
+from ...utils.worker import MacroRunWorker, WorkerResult
+from ...utils.settings import get_settings_manager
 
 
 class MacroListItem(QListWidgetItem):
@@ -160,6 +163,8 @@ class MacroPage(QWidget):
         super().__init__(parent)
         
         self._recorder = MacroRecorder()
+        self._worker: Optional[MacroRunWorker] = None
+        self._settings = get_settings_manager()
         
         self._setup_ui()
         self._load_macros()
@@ -191,6 +196,11 @@ class MacroPage(QWidget):
         list_header = QHBoxLayout()
         list_header.addWidget(QLabel("매크로 목록"))
         list_header.addStretch()
+
+        preset_btn = QPushButton("프리셋 추가")
+        preset_btn.setProperty("class", "secondary")
+        preset_btn.clicked.connect(self._add_preset_macro)
+        list_header.addWidget(preset_btn)
         
         new_btn = QPushButton("+ 새 매크로")
         new_btn.clicked.connect(self._create_macro)
@@ -240,6 +250,11 @@ class MacroPage(QWidget):
             }
         """)
         right_layout.addWidget(self.script_preview)
+
+        # 진행률 카드
+        self.progress_card = ProgressCard()
+        self.progress_card.setVisible(False)
+        right_layout.addWidget(self.progress_card)
         
         # 버튼들
         btn_layout = QHBoxLayout()
@@ -268,6 +283,63 @@ class MacroPage(QWidget):
         splitter.setSizes([300, 500])
         
         layout.addWidget(splitter)
+
+    def _add_preset_macro(self) -> None:
+        presets = self._recorder.get_preset_macros()
+        if not presets:
+            QMessageBox.information(self, "알림", "사용 가능한 프리셋이 없습니다.")
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("프리셋 매크로 추가")
+        dialog.setFixedSize(520, 420)
+
+        v = QVBoxLayout(dialog)
+        v.addWidget(QLabel("추가할 프리셋을 선택하세요"))
+
+        lst = QListWidget()
+        for p in presets:
+            item = QListWidgetItem(f"{p.get('name')} - {p.get('description')}")
+            item.setData(Qt.ItemDataRole.UserRole, p)
+            lst.addItem(item)
+        v.addWidget(lst, 1)
+
+        btns = QHBoxLayout()
+        btns.addStretch()
+        cancel = QPushButton("취소")
+        cancel.setProperty("class", "secondary")
+        cancel.clicked.connect(dialog.reject)
+        btns.addWidget(cancel)
+
+        ok = QPushButton("추가")
+        ok.clicked.connect(dialog.accept)
+        btns.addWidget(ok)
+        v.addLayout(btns)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        current = lst.currentItem()
+        if not current:
+            return
+        preset = current.data(Qt.ItemDataRole.UserRole) or {}
+
+        name = preset.get("name", "프리셋 매크로")
+        replacements = preset.get("replacements", [])
+        if not replacements:
+            QMessageBox.warning(self, "오류", "프리셋 데이터가 비어있습니다.")
+            return
+
+        try:
+            self._recorder.create_batch_replace_macro(
+                name=name,
+                replacements=[tuple(r) for r in replacements],
+                description=preset.get("description", ""),
+            )
+            self._load_macros()
+            QMessageBox.information(self, "완료", f"'{name}' 프리셋 매크로가 추가되었습니다.")
+        except Exception as e:
+            QMessageBox.warning(self, "오류", f"프리셋 추가 실패:\n{e}")
     
     def _load_macros(self) -> None:
         """매크로 목록 로드"""
@@ -377,11 +449,50 @@ class MacroPage(QWidget):
         )
         
         if reply == QMessageBox.StandardButton.Yes:
-            success = self._recorder.run_macro(macro.id)
-            if success:
-                QMessageBox.information(self, "완료", "매크로 실행이 완료되었습니다.")
-            else:
-                QMessageBox.warning(self, "오류", "매크로 실행에 실패했습니다.")
+            if self._worker is not None:
+                try:
+                    self.progress_card.cancelled.disconnect(self._worker.cancel)
+                except TypeError:
+                    pass
+
+            self.progress_card.setVisible(True)
+            self.progress_card.reset()
+            self.progress_card.set_status("매크로 실행 중...")
+            self.run_btn.setEnabled(False)
+            self.export_btn.setEnabled(False)
+            self.delete_btn.setEnabled(False)
+
+            self._worker = MacroRunWorker(macro.id)
+            self.progress_card.cancelled.connect(self._worker.cancel)
+            self._worker.progress.connect(lambda c, t, n: (self.progress_card.set_count(c, t), self.progress_card.set_current_file(n)))
+            self._worker.status_changed.connect(self.progress_card.set_status)
+            self._worker.finished_with_result.connect(self._on_run_finished)
+            self._worker.error_occurred.connect(self._on_run_error)
+            self._worker.start()
+
+    def _on_run_finished(self, result: WorkerResult) -> None:
+        self.run_btn.setEnabled(True)
+        self.export_btn.setEnabled(True)
+        self.delete_btn.setEnabled(True)
+
+        data = result.data or {}
+        if data.get("cancelled"):
+            self.progress_card.set_error("작업이 취소되었습니다.")
+            return
+
+        if result.success:
+            self.progress_card.set_completed(1, 0)
+            self._load_macros()
+            QMessageBox.information(self, "완료", "매크로 실행이 완료되었습니다.")
+        else:
+            self.progress_card.set_error(result.error_message or "오류 발생")
+            QMessageBox.warning(self, "오류", result.error_message or "매크로 실행에 실패했습니다.")
+
+    def _on_run_error(self, message: str) -> None:
+        self.run_btn.setEnabled(True)
+        self.export_btn.setEnabled(True)
+        self.delete_btn.setEnabled(True)
+        self.progress_card.set_error(message)
     
     def _export_macro(self) -> None:
         """매크로 내보내기"""
@@ -394,7 +505,7 @@ class MacroPage(QWidget):
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "매크로 스크립트 저장",
-            str(Path.home() / "Documents" / f"{macro.name}.py"),
+            str(Path(self._settings.get("default_output_dir", str(Path.home() / "Documents"))) / f"{macro.name}.py"),
             "Python 파일 (*.py)"
         )
         

@@ -6,6 +6,8 @@ Author: HWP Master
 """
 
 from typing import Optional
+import os
+from ...utils.settings import get_settings_manager
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QLineEdit, QGroupBox, QProgressBar,
@@ -24,6 +26,7 @@ class ImageExtractorPage(QWidget):
         super().__init__(parent)
         self._output_dir = ""
         self.worker = None
+        self._settings = get_settings_manager()
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -103,6 +106,7 @@ class ImageExtractorPage(QWidget):
         self.open_folder_btn = QPushButton("폴더 열기")
         self.open_folder_btn.setProperty("class", "secondary")
         self.open_folder_btn.setEnabled(False)
+        self.open_folder_btn.clicked.connect(self._open_output_folder)
         btn_layout.addWidget(self.open_folder_btn)
         
         self.extract_btn = QPushButton("이미지 추출")
@@ -117,7 +121,8 @@ class ImageExtractorPage(QWidget):
     
     def _on_browse(self) -> None:
         """폴더 선택"""
-        folder = QFileDialog.getExistingDirectory(self, "저장 폴더 선택")
+        start_dir = self._settings.get("default_output_dir", "")
+        folder = QFileDialog.getExistingDirectory(self, "저장 폴더 선택", start_dir)
         if folder:
             self._output_dir = folder
             self.dir_input.setText(folder)
@@ -156,7 +161,8 @@ class ImageExtractorPage(QWidget):
         self.open_folder_btn.setEnabled(False)
     
     def _on_progress(self, current: int, total: int, message: str) -> None:
-        self.progress.setValue(int(current / total * 100))
+        if total > 0:
+            self.progress.setValue(int(current / total * 100))
         self.result_label.setText(f"처리 중: {message}")
     
     def _on_finished(self, result) -> None:
@@ -170,12 +176,20 @@ class ImageExtractorPage(QWidget):
             get_toast_manager().success(f"{count}개 파일에서 {images}개 이미지 추출 완료")
             self.result_label.setText(f"총 추출된 이미지: {images}개")
             
-            # 결과 목록 업데이트 (간략히 성공 메시지만)
+            # 결과 목록 업데이트 (샘플 경로 표시)
             self.result_list.clear()
             self.result_list.addItem(QListWidgetItem(f"완료: {count}개 파일 처리됨"))
+            for fname, path in (result.data.get("images", []) or [])[:30]:
+                self.result_list.addItem(QListWidgetItem(f"{fname} -> {path}"))
         else:
             get_toast_manager().error(f"오류: {result.error_message}")
             
     def _on_error(self, message: str) -> None:
         get_toast_manager().error(f"작업 중 오류 발생: {message}")
 
+    def _open_output_folder(self) -> None:
+        if self._output_dir and os.path.exists(self._output_dir):
+            try:
+                os.startfile(self._output_dir)  # type: ignore[attr-defined]
+            except Exception as e:
+                get_toast_manager().error(f"폴더 열기 실패: {e}")

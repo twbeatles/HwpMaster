@@ -14,7 +14,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 
 from ..widgets.file_list import FileListWidget
+from ..widgets.progress_card import ProgressCard
 from ..widgets.toast import get_toast_manager
+from ...utils.settings import get_settings_manager
 
 
 PRESETS = {
@@ -59,6 +61,7 @@ class HeaderFooterPage(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.worker: Any = None
+        self._settings = get_settings_manager()
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -134,9 +137,6 @@ class HeaderFooterPage(QWidget):
         self.footer_right = QLineEdit()
         footer_layout.addWidget(self.footer_right, 4, 1)
 
-        # 페이지 번호 설정 (위치 조정)
-        footer_layout.addWidget(self.page_num_enabled, 5, 0, 1, 2)
-        
         # 페이지 번호 형식 콤보박스
         self.page_format = QComboBox()
         self.page_format.addItems(["단순 숫자 (1)", "전체 페이지 (1/10)", "- 쪽 번호 - (- 1 -)", "괄호 숫자 ((1))", "한글 숫자 (일)"])
@@ -178,6 +178,12 @@ class HeaderFooterPage(QWidget):
         btn_layout.addWidget(self.apply_btn)
         
         layout.addLayout(btn_layout)
+
+        # 진행률 카드 (긴 작업 UI 통일)
+        self.progress_card = ProgressCard()
+        self.progress_card.setVisible(False)
+        layout.addWidget(self.progress_card)
+
         layout.addStretch()
         
     def _on_preset_selected(self, name: str) -> None:
@@ -199,12 +205,21 @@ class HeaderFooterPage(QWidget):
         if "header_center" in preset: self.header_center.setText(preset["header_center"])
         if "header_right" in preset: self.header_right.setText(preset["header_right"])
         
-        # 3. 푸터/페이지 번호 설정
-        if "page_format" in preset:
-            # 포맷 매핑이 복잡하므로 간단히 처리하거나, 프리셋 구조를 인덱스로 변경 고려.
-            # 현재는 텍스트 매칭 등 로직 필요하지만, 단순화를 위해 첫번째 옵션 등으로 처리하지 않고
-            # Description에 있는 값 매핑 시도. 
-            pass # 상세 매핑 로직은 추후 보완
+        # 3. 헤더/푸터/페이지번호 on/off
+        # 프리셋에 헤더 텍스트가 있으면 헤더 활성화
+        self.header_enabled.setChecked(any(k in preset for k in ["header_left", "header_center", "header_right"]))
+        self.footer_enabled.setChecked(True)
+        self.page_num_enabled.setChecked(True)
+
+        # 4. 페이지 번호 포맷 매핑
+        page_format = preset.get("page_format", "{page}")
+        format_idx_map = {
+            "{page}": 0,
+            "{page}/{total}": 1,
+            "- {page} -": 2,
+        }
+        if page_format in format_idx_map:
+            self.page_format.setCurrentIndex(format_idx_map[page_format])
             
         position = preset.get("position", "center")
         if position == "left": self.page_position.setCurrentIndex(0)
@@ -236,7 +251,8 @@ class HeaderFooterPage(QWidget):
         from PySide6.QtWidgets import QMessageBox
         reply = QMessageBox.question(
             self, "확인", "원본 파일에 덮어쓰시겠습니까?\n'No'를 선택하면 별도 폴더에 저장합니다.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.No,
         )
         
         if reply == QMessageBox.StandardButton.Cancel:
@@ -244,7 +260,8 @@ class HeaderFooterPage(QWidget):
             
         output_dir = None
         if reply == QMessageBox.StandardButton.No:
-            output_dir = QFileDialog.getExistingDirectory(self, "저장할 폴더 선택")
+            start = self._settings.get("default_output_dir", "")
+            output_dir = QFileDialog.getExistingDirectory(self, "저장할 폴더 선택", start)
             if not output_dir:
                 return
 
@@ -301,7 +318,8 @@ class HeaderFooterPage(QWidget):
         from PySide6.QtWidgets import QMessageBox
         reply = QMessageBox.question(
             self, "확인", "원본 파일에 덮어쓰시겠습니까?\n'No'를 선택하면 별도 폴더에 저장합니다.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.No,
         )
         
         if reply == QMessageBox.StandardButton.Cancel:
@@ -309,7 +327,8 @@ class HeaderFooterPage(QWidget):
             
         output_dir = None
         if reply == QMessageBox.StandardButton.No:
-            output_dir = QFileDialog.getExistingDirectory(self, "저장할 폴더 선택")
+            start = self._settings.get("default_output_dir", "")
+            output_dir = QFileDialog.getExistingDirectory(self, "저장할 폴더 선택", start)
             if not output_dir:
                 return
 
@@ -320,10 +339,23 @@ class HeaderFooterPage(QWidget):
     def _run_worker(self):
         if self.worker is None:
             return
-        self.worker.progress.connect(self._on_progress)
+
+        self.progress_card.setVisible(True)
+        self.progress_card.reset()
+        self.progress_card.set_title("헤더/푸터 작업")
+        self.progress_card.set_status("작업 준비 중...")
+
+        try:
+            self.progress_card.cancelled.disconnect()
+        except TypeError:
+            pass
+
+        self.progress_card.cancelled.connect(self.worker.cancel)
+        self.worker.progress.connect(lambda c, t, n: (self.progress_card.set_count(c, t), self.progress_card.set_current_file(n)))
+        self.worker.status_changed.connect(self.progress_card.set_status)
         self.worker.finished_with_result.connect(self._on_finished)
         self.worker.error_occurred.connect(self._on_error)
-        
+
         self.worker.start()
         self.apply_btn.setEnabled(False)
         self.remove_btn.setEnabled(False)
@@ -335,12 +367,21 @@ class HeaderFooterPage(QWidget):
         self.apply_btn.setEnabled(True)
         self.remove_btn.setEnabled(True)
         
+        data = getattr(result, "data", None) or {}
+        if data.get("cancelled"):
+            self.progress_card.set_error("작업이 취소되었습니다.")
+            return
+
         if result.success:
-            count = result.data.get("success_count", 0)
-            get_toast_manager().success(f"{count}개 파일 작업 완료")
+            success_count = data.get("success_count", 0)
+            fail_count = data.get("fail_count", 0)
+            self.progress_card.set_completed(success_count, fail_count)
+            get_toast_manager().success(f"{success_count}개 파일 작업 완료")
         else:
-            get_toast_manager().error(f"오류: {result.error_message}")
+            self.progress_card.set_error(getattr(result, "error_message", None) or "오류 발생")
+            get_toast_manager().error(f"오류: {getattr(result, 'error_message', None)}")
             
     def _on_error(self, message: str) -> None:
+        self.progress_card.set_error(message)
         get_toast_manager().error(f"작업 중 오류 발생: {message}")
 

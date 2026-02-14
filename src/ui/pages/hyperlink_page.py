@@ -6,16 +6,19 @@ Author: HWP Master
 """
 
 from typing import Optional
+from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTableWidget, QTableWidgetItem,
-    QGroupBox, QHeaderView, QFileDialog, QProgressBar
+    QGroupBox, QHeaderView, QFileDialog, QProgressBar, QMessageBox
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
 from ..widgets.file_list import FileListWidget
 from ..widgets.toast import get_toast_manager
+from ...utils.settings import get_settings_manager
+from ...core.hyperlink_checker import HyperlinkChecker
 
 
 class HyperlinkPage(QWidget):
@@ -25,6 +28,8 @@ class HyperlinkPage(QWidget):
         super().__init__(parent)
         self.temp_dir: str = ""
         self.worker = None
+        self._settings = get_settings_manager()
+        self._links: list[tuple[str, object]] = []
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -109,6 +114,27 @@ class HyperlinkPage(QWidget):
         if not files:
             get_toast_manager().warning("파일을 추가해주세요.")
             return
+
+        external_enabled = bool(self._settings.get("hyperlink_external_requests_enabled", True))
+        notice_shown = bool(self._settings.get("hyperlink_privacy_notice_shown", False))
+        if external_enabled and not notice_shown:
+            reply = QMessageBox.warning(
+                self,
+                "외부 접속 안내",
+                "하이퍼링크 검사는 문서에 포함된 외부 URL에 실제로 접속할 수 있습니다.\n"
+                "보안/프라이버시 정책에 따라 외부 접속이 제한될 수 있습니다.\n\n"
+                "계속 진행하시겠습니까?",
+                QMessageBox.StandardButton.Yes
+                | QMessageBox.StandardButton.No
+                | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if reply == QMessageBox.StandardButton.Cancel:
+                return
+            if reply == QMessageBox.StandardButton.No:
+                external_enabled = False
+                self._settings.set("hyperlink_external_requests_enabled", False)
+            self._settings.set("hyperlink_privacy_notice_shown", True)
         
         self.link_table.setRowCount(0)
         self.progress.setVisible(True)
@@ -124,7 +150,15 @@ class HyperlinkPage(QWidget):
         import tempfile
         self.temp_dir = tempfile.mkdtemp()
         
-        self.worker = HyperlinkWorker(files, self.temp_dir)
+        timeout_sec = int(self._settings.get("hyperlink_timeout_sec", 5))
+        allowlist = str(self._settings.get("hyperlink_domain_allowlist", ""))
+        self.worker = HyperlinkWorker(
+            files,
+            self.temp_dir,
+            external_requests_enabled=external_enabled,
+            timeout_sec=timeout_sec,
+            domain_allowlist=allowlist,
+        )
         self.worker.progress.connect(self._on_progress)
         self.worker.finished_with_result.connect(self._on_finished)
         self.worker.error_occurred.connect(self._on_error)
@@ -141,6 +175,7 @@ class HyperlinkPage(QWidget):
         
         if result.success:
             links = result.data.get("links", [])
+            self._links = links
             valid_count = result.data.get("success_count", 0) # 문서 성공 개수가 아니라 링크 성공 개수? 
             # Worker에서 success_count는 성공한 *파일* 수, total_links는 *링크* 수
             # Data: success_count, total_links, links
@@ -148,7 +183,7 @@ class HyperlinkPage(QWidget):
             # 링크 데이터를 기반으로 카운트 다시 계산
             total = len(links)
             valid = sum(1 for _, l in links if l.status.value in ["valid", "local_ok"])
-            broken = total - valid
+            broken = sum(1 for _, l in links if l.status.value in ["broken", "local_missing", "timeout"])
             
             self.total_label.setText(f"총 링크: {total}개")
             self.valid_label.setText(f"유효: {valid}개")
@@ -190,21 +225,34 @@ class HyperlinkPage(QWidget):
             get_toast_manager().warning("검사 결과가 없습니다.")
             return
             
+        default_dir = self._settings.get("default_output_dir", "")
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "리포트 저장", "", "HTML 파일 (*.html)"
+            self,
+            "리포트 저장",
+            str(Path(default_dir) / "hyperlink_report.xlsx") if default_dir else "",
+            "Excel 파일 (*.xlsx);;HTML 파일 (*.html)"
         )
         if file_path:
             try:
-                # 간단한 통합 리포트 생성
+                import html
+                if file_path.lower().endswith(".xlsx"):
+                    checker = HyperlinkChecker()
+                    ok = checker.export_links_to_excel(self._links, file_path)
+                    if not ok:
+                        raise RuntimeError("엑셀 저장 실패")
+                    get_toast_manager().success(f"엑셀 저장 완료: {file_path}")
+                    return
+
+                # 간단한 통합 HTML 리포트 생성
                 with open(file_path, "w", encoding="utf-8") as f:
                     f.write("<html><head><meta charset='utf-8'><style>")
                     f.write("table { border-collapse: collapse; width: 100%; }")
                     f.write("th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }")
                     f.write(".valid { color: green; } .broken { color: red; }")
                     f.write("</style></head><body>")
-                    f.write(f"<h1>링크 검사 결과 ({self.total_label.text()})</h1>")
+                    f.write(f"<h1>링크 검사 결과 ({html.escape(self.total_label.text())})</h1>")
                     f.write("<table><tr><th>상태</th><th>URL</th><th>텍스트</th><th>오류</th></tr>")
-                    
+
                     for r in range(self.link_table.rowCount()):
                         status_item = self.link_table.item(r, 0)
                         url_item = self.link_table.item(r, 1)
@@ -216,10 +264,15 @@ class HyperlinkPage(QWidget):
                         text = text_item.text() if text_item else ""
                         error = error_item.text() if error_item else ""
                         cls = "valid" if status == "✓" else "broken"
-                        f.write(f"<tr><td class='{cls}'>{status}</td><td>{url}</td><td>{text}</td><td>{error}</td></tr>")
-                    
+                        f.write(
+                            f"<tr><td class='{cls}'>{html.escape(status)}</td>"
+                            f"<td>{html.escape(url)}</td>"
+                            f"<td>{html.escape(text)}</td>"
+                            f"<td>{html.escape(error)}</td></tr>"
+                        )
+
                     f.write("</table></body></html>")
-                
+
                 get_toast_manager().success(f"리포트 저장 완료: {file_path}")
             except Exception as e:
                 get_toast_manager().error(f"저장 실패: {e}")

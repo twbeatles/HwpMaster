@@ -20,6 +20,8 @@ from PySide6.QtGui import QFont
 from ...core.style_cop import StyleCop, StyleRule
 from ..widgets.file_list import FileListWidget
 from ..widgets.progress_card import ProgressCard
+from ...utils.worker import StyleCopWorker, WorkerResult
+from ...utils.settings import get_settings_manager
 
 
 class PresetCard(QFrame):
@@ -70,6 +72,8 @@ class StyleCopPage(QWidget):
         
         self._style_cop = StyleCop()
         self._selected_rule: Optional[StyleRule] = None
+        self._worker: Optional[StyleCopWorker] = None
+        self._settings = get_settings_manager()
         
         self._setup_ui()
     
@@ -262,7 +266,7 @@ class StyleCopPage(QWidget):
         output_dir = QFileDialog.getExistingDirectory(
             self,
             "저장 위치 선택",
-            str(Path.home() / "Documents")
+            self._settings.get("default_output_dir", str(Path.home() / "Documents"))
         )
         
         if not output_dir:
@@ -270,27 +274,51 @@ class StyleCopPage(QWidget):
         
         self.progress_card.setVisible(True)
         self.progress_card.set_status("스타일 적용 중...")
+        self.progress_card.reset()
+        self.apply_btn.setEnabled(False)
+        self.check_btn.setEnabled(False)
         
-        try:
-            results = self._style_cop.batch_apply_style(
-                files,
-                self._selected_rule,
-                output_dir,
-                progress_callback=lambda c, t, n: self.progress_card.set_count(c, t)
-            )
-            
-            success = sum(1 for r in results if r.success)
-            self.progress_card.set_completed(success, len(results) - success)
-            
+        if self._worker is not None:
+            try:
+                self.progress_card.cancelled.disconnect(self._worker.cancel)
+            except TypeError:
+                pass
+
+        self._worker = StyleCopWorker(files, self._selected_rule, output_dir)
+        self.progress_card.cancelled.connect(self._worker.cancel)
+        self._worker.progress.connect(lambda c, t, n: (self.progress_card.set_count(c, t), self.progress_card.set_current_file(n)))
+        self._worker.status_changed.connect(self.progress_card.set_status)
+        self._worker.finished_with_result.connect(self._on_apply_finished)
+        self._worker.error_occurred.connect(self._on_apply_error)
+        self._worker.start()
+
+    def _on_apply_finished(self, result: WorkerResult) -> None:
+        self.apply_btn.setEnabled(True)
+        self.check_btn.setEnabled(True)
+
+        data = result.data or {}
+        if data.get("cancelled"):
+            self.progress_card.set_error("작업이 취소되었습니다.")
+            return
+
+        if result.success:
+            success = data.get("success_count", 0)
+            fail = data.get("fail_count", 0)
+            out_dir = data.get("output_dir", "")
+            self.progress_card.set_completed(success, fail)
             QMessageBox.information(
                 self,
                 "완료",
                 f"스타일 적용이 완료되었습니다.\n\n"
                 f"성공: {success}개\n"
-                f"실패: {len(results) - success}개\n"
-                f"저장 위치: {output_dir}"
+                f"실패: {fail}개\n"
+                f"저장 위치: {out_dir}"
             )
-            
-        except Exception as e:
-            self.progress_card.set_error(str(e))
-            QMessageBox.warning(self, "오류", f"스타일 적용 중 오류가 발생했습니다:\n{e}")
+        else:
+            self.progress_card.set_error(result.error_message or "오류 발생")
+            QMessageBox.warning(self, "오류", result.error_message or "스타일 적용 중 오류가 발생했습니다.")
+
+    def _on_apply_error(self, message: str) -> None:
+        self.apply_btn.setEnabled(True)
+        self.check_btn.setEnabled(True)
+        self.progress_card.set_error(message)

@@ -3,11 +3,11 @@ HWP Master - HWP 업무 자동화 도구
 프로그램 진입점
 
 Author: HWP Master
-Version: 1.0.0
 """
 
 import sys
 import os
+import logging
 from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
@@ -16,17 +16,26 @@ from PySide6.QtGui import QFont, QFontDatabase
 
 
 def load_stylesheet(app: QApplication) -> None:
-    """QSS 스타일시트 로드"""
-    # 스타일시트 경로 결정
-    if getattr(sys, 'frozen', False):
-        # PyInstaller 번들
+    """QSS 스타일시트 로드 (테마 프리셋 지원)"""
+    try:
+        from src.utils.settings import get_settings_manager
+        from src.utils.qss_renderer import build_stylesheet
+
+        settings = get_settings_manager()
+        preset = settings.get("theme_preset", "Dark (기본)")
+        app.setStyleSheet(build_stylesheet(preset))
+        return
+    except Exception as e:
+        # fallback to bundled style.qss
+        logging.getLogger(__name__).warning(f"테마 QSS 적용 실패, 기본 QSS로 fallback: {e}")
+
+    if getattr(sys, "frozen", False):
         base_path = Path(sys._MEIPASS)
     else:
-        # 개발 환경
         base_path = Path(__file__).parent
-    
+
     style_path = base_path / "assets" / "styles" / "style.qss"
-    
+
     if style_path.exists():
         file = QFile(str(style_path))
         if file.open(QFile.OpenModeFlag.ReadOnly | QFile.OpenModeFlag.Text):
@@ -34,18 +43,19 @@ def load_stylesheet(app: QApplication) -> None:
             stylesheet = stream.readAll()
             app.setStyleSheet(stylesheet)
             file.close()
-    else:
-        # 기본 스타일 (스타일시트 파일 없을 경우)
-        app.setStyleSheet("""
-            QMainWindow {
-                background-color: #1a1a2e;
-            }
-            QWidget {
-                background-color: #1a1a2e;
-                color: #e8e8e8;
-                font-family: "Segoe UI", "Malgun Gothic", sans-serif;
-            }
-        """)
+        return
+
+    # 기본 스타일 (스타일시트 파일 없을 경우)
+    app.setStyleSheet("""
+        QMainWindow {
+            background-color: #1a1a2e;
+        }
+        QWidget {
+            background-color: #1a1a2e;
+            color: #e8e8e8;
+            font-family: "Segoe UI", "Malgun Gothic", sans-serif;
+        }
+    """)
 
 
 def setup_fonts() -> None:
@@ -64,9 +74,11 @@ def main() -> int:
     
     # 애플리케이션 생성
     app = QApplication(sys.argv)
-    app.setApplicationName("HWP Master")
-    app.setApplicationVersion("1.0.0")
-    app.setOrganizationName("HWP Master")
+    from src.utils.version import APP_NAME, APP_VERSION
+
+    app.setApplicationName(APP_NAME)
+    app.setApplicationVersion(APP_VERSION)
+    app.setOrganizationName(APP_NAME)
     
     # 기본 폰트 설정
     default_font = QFont("Segoe UI", 10)

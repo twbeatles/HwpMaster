@@ -14,7 +14,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from ..widgets.file_list import FileListWidget
+from ..widgets.progress_card import ProgressCard
 from ..widgets.toast import get_toast_manager
+from ...utils.settings import get_settings_manager
 
 
 class BookmarkPage(QWidget):
@@ -23,6 +25,7 @@ class BookmarkPage(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.worker = None
+        self._settings = get_settings_manager()
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -92,6 +95,12 @@ class BookmarkPage(QWidget):
         main_layout.addWidget(bookmark_group, 1)
         
         layout.addLayout(main_layout)
+
+        # 진행률 카드 (긴 작업 UI 통일)
+        self.progress_card = ProgressCard()
+        self.progress_card.setVisible(False)
+        layout.addWidget(self.progress_card)
+
         layout.addStretch()
     
     def _run_worker(self, mode: str, files: list[str], output_dir: Optional[str] = None) -> None:
@@ -99,7 +108,19 @@ class BookmarkPage(QWidget):
         from ...utils.worker import BookmarkWorker
         
         self.worker = BookmarkWorker(mode, files, output_dir)
-        self.worker.progress.connect(self._on_progress)
+        self.progress_card.setVisible(True)
+        self.progress_card.reset()
+        self.progress_card.set_title("북마크 작업")
+        self.progress_card.set_status("작업 준비 중...")
+
+        try:
+            self.progress_card.cancelled.disconnect()
+        except TypeError:
+            pass
+
+        self.progress_card.cancelled.connect(self.worker.cancel)
+        self.worker.progress.connect(lambda c, t, n: (self.progress_card.set_count(c, t), self.progress_card.set_current_file(n)))
+        self.worker.status_changed.connect(self.progress_card.set_status)
         self.worker.finished_with_result.connect(lambda res: self._on_finished(res, mode))
         self.worker.error_occurred.connect(self._on_error)
         
@@ -129,7 +150,11 @@ class BookmarkPage(QWidget):
             return
 
         # 폴더 선택으로 변경 (Batch Export)
-        output_dir = QFileDialog.getExistingDirectory(self, "저장할 폴더 선택")
+        output_dir = QFileDialog.getExistingDirectory(
+            self,
+            "저장할 폴더 선택",
+            self._settings.get("default_output_dir", ""),
+        )
         if output_dir:
             self._run_worker("export", files, output_dir)
             
@@ -144,7 +169,8 @@ class BookmarkPage(QWidget):
         reply = QMessageBox.question(
             self, "삭제 확인", 
             f"{len(files)}개 파일의 모든 북마크를 삭제하시겠습니까?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
         
         if reply == QMessageBox.StandardButton.Yes:
@@ -164,12 +190,19 @@ class BookmarkPage(QWidget):
         self.export_btn.setEnabled(True)
         self.delete_all_btn.setEnabled(True)
         self.delete_selected_btn.setEnabled(True)
-        
+
+        data = getattr(result, "data", None) or {}
+        if data.get("cancelled"):
+            self.progress_card.set_error("작업이 취소되었습니다.")
+            return
+
         if result.success:
-            count = result.data.get("success_count", 0)
+            count = data.get("success_count", 0)
+            fail = data.get("fail_count", 0)
+            self.progress_card.set_completed(count, fail)
             
             if mode == "extract":
-                bookmarks = result.data.get("bookmarks", [])
+                bookmarks = data.get("bookmarks", [])
                 self.bookmark_table.setRowCount(0)
                 
                 for fname, bm in bookmarks:
@@ -190,8 +223,10 @@ class BookmarkPage(QWidget):
                 if count > 0:
                     self._on_extract() # 목록 갱신
         else:
+            self.progress_card.set_error(getattr(result, "error_message", None) or "오류 발생")
             get_toast_manager().error(f"오류: {result.error_message}")
             
     def _on_error(self, message: str) -> None:
+        self.progress_card.set_error(message)
         get_toast_manager().error(f"작업 중 오류 발생: {message}")
 

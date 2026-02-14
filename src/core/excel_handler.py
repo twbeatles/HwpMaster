@@ -6,9 +6,13 @@ Author: HWP Master
 """
 
 import csv
+import logging
 from pathlib import Path
 from typing import Optional, Iterator, Any
 from dataclasses import dataclass
+
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -437,7 +441,8 @@ class ExcelHandler:
             wb.save(file_path)
             return True
             
-        except Exception:
+        except Exception as e:
+            _logger.warning(f"엑셀 저장 실패: {file_path} ({e})", exc_info=True)
             return False
     
     @staticmethod
@@ -470,5 +475,6 @@ class ExcelHandler:
             
             return True
             
-        except Exception:
+        except Exception as e:
+            _logger.warning(f"CSV 저장 실패: {file_path} ({e})", exc_info=True)
             return False

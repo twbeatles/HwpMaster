@@ -58,6 +58,20 @@ class DataInjectPage(QWidget):
         data_layout.addWidget(self.data_btn)
         
         layout.addLayout(data_layout)
+
+        # 출력 폴더
+        output_layout = QHBoxLayout()
+        output_layout.addWidget(QLabel("기본 출력 폴더:"))
+
+        self.output_label = QLabel("")
+        self.output_label.setStyleSheet("color: #888888;")
+        output_layout.addWidget(self.output_label, 1)
+
+        self.output_btn = QPushButton("변경...")
+        self.output_btn.setMinimumWidth(100)
+        output_layout.addWidget(self.output_btn)
+
+        layout.addLayout(output_layout)
         
         # 진행률 카드
         self.progress_card = ProgressCard()

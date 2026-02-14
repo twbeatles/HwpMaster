@@ -287,7 +287,8 @@ class RegexReplacer:
                             find_replace.UseRegExp = 1  # 정규식 사용
                             find_replace.ReplaceAll = 1
                             hwp.HAction.Execute("FindReplace", find_replace.HSet)
-                            count = 1  # 실제 횟수 확인 어려움
+                            # pyhwpx/한글의 FindReplace는 치환 횟수 반환이 어려워 정확 집계가 불가능함
+                            count = -1
                         else:
                             # 일반 텍스트 모드
                             hwp.HAction.GetDefault("FindReplace", hwp.HParameterSet.HFindReplace.HSet)
@@ -297,10 +298,10 @@ class RegexReplacer:
                             find_replace.UseRegExp = 0
                             find_replace.ReplaceAll = 1
                             hwp.HAction.Execute("FindReplace", find_replace.HSet)
-                            count = 1
+                            count = -1
                         
-                        results[rule.name] = count if count else 0
-                        
+                        results[rule.name] = count
+                         
                     except Exception as e:
                         self._logger.warning(f"규칙 '{rule.name}' 적용 실패: {e}")
                         results[rule.name] = 0
@@ -346,7 +347,9 @@ class RegexReplacer:
                 progress_callback(idx, total, filename)
             
             if output_dir:
-                output_path = str(Path(output_dir) / filename)
+                from ..utils.output_paths import resolve_output_path
+
+                output_path = resolve_output_path(output_dir, file_path)
             else:
                 output_path = None
             

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QStackedWidget, QFrame,
     QSizePolicy, QSpacerItem, QFileDialog, QMessageBox,
     QScrollArea
@@ -29,6 +29,8 @@ from .widgets.feature_card import FeatureCard
 from .widgets.toast import ToastManager, ToastType, get_toast_manager
 from ..utils.worker import ConversionWorker, MergeWorker, SplitWorker, DataInjectWorker, MetadataCleanWorker, WorkerResult
 from ..utils.settings import get_settings_manager
+from ..utils.qss_renderer import build_stylesheet
+from ..utils.version import APP_VERSION
 
 
 
@@ -113,7 +115,12 @@ class Sidebar(QFrame):
         self._title_label.setStyleSheet("color: #ffffff; background: transparent;")
         title_inner.addWidget(self._title_label)
         
-        self._version_label = QLabel("v5.0")
+        # Keep version in sync with QApplication version (set in main.py)
+        try:
+            version = QApplication.instance().applicationVersion() if QApplication.instance() else ""
+        except Exception:
+            version = ""
+        self._version_label = QLabel(f"v{version}" if version else f"v{APP_VERSION}")
         self._version_label.setStyleSheet("color: #8957e5; font-size: 11px; background: transparent;")
         title_inner.addWidget(self._version_label)
         
@@ -366,13 +373,74 @@ class MainWindow(QMainWindow):
         configured = self._settings.get("default_output_dir", "")
         if configured and Path(configured).exists():
             return configured
-        return str(Path.home() / "Documents")
+        fallback = Path.home() / "Documents" / "HWP Master"
+        try:
+            fallback.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            from ..utils.logger import get_logger
+            get_logger(__name__).warning(f"기본 출력 폴더 생성 실패(무시): {fallback} ({e})")
+        return str(fallback)
 
     def _sync_settings_page(self) -> None:
         """설정값을 설정 페이지 UI에 반영"""
         default_output_dir = self._settings.get("default_output_dir", "")
         if default_output_dir:
             self.settings_page.output_label.setText(default_output_dir)
+            # 다른 페이지에도 반영
+            if hasattr(self, "convert_page"):
+                self.convert_page.output_label.setText(default_output_dir)
+            if hasattr(self, "metadata_page"):
+                self.metadata_page.output_label.setText(default_output_dir)
+            if hasattr(self, "data_inject_page"):
+                self.data_inject_page.output_label.setText(default_output_dir)
+
+        # 테마 프리셋 반영
+        preset = self._settings.get("theme_preset", "Dark (기본)")
+        if hasattr(self.settings_page, "theme_combo"):
+            idx = self.settings_page.theme_combo.findText(preset)
+            if idx >= 0:
+                self.settings_page.theme_combo.setCurrentIndex(idx)
+
+        # 하이퍼링크 검사 설정 반영
+        if hasattr(self.settings_page, "hyperlink_external_checkbox"):
+            cb = self.settings_page.hyperlink_external_checkbox
+            cb.blockSignals(True)
+            cb.setChecked(bool(self._settings.get("hyperlink_external_requests_enabled", True)))
+            cb.blockSignals(False)
+
+        if hasattr(self.settings_page, "hyperlink_timeout_spin"):
+            sp = self.settings_page.hyperlink_timeout_spin
+            sp.blockSignals(True)
+            try:
+                sp.setValue(int(self._settings.get("hyperlink_timeout_sec", 5)))
+            except Exception:
+                sp.setValue(5)
+            sp.blockSignals(False)
+
+        if hasattr(self.settings_page, "hyperlink_allowlist_edit"):
+            ed = self.settings_page.hyperlink_allowlist_edit
+            ed.blockSignals(True)
+            ed.setText(str(self._settings.get("hyperlink_domain_allowlist", "")))
+            ed.blockSignals(False)
+
+    def _apply_theme_preset(self, preset: str) -> None:
+        """QSS 템플릿 기반으로 테마 적용"""
+        try:
+            app = QApplication.instance()
+            if app is None:
+                return
+            app.setStyleSheet(build_stylesheet(preset))
+        except Exception as e:
+            # 테마 적용 실패는 앱 동작에 치명적이지 않으므로 경고만 표시
+            from ..utils.logger import get_logger
+            get_logger(__name__).warning(f"테마 적용 실패: {e}")
+
+    def _cancel_current_worker(self) -> None:
+        if self._current_worker is not None:
+            try:
+                self._current_worker.cancel()
+            except Exception as e:
+                get_logger(__name__).warning(f"worker.cancel() 호출 실패(무시): {e}")
     
     def set_busy(self, busy: bool) -> None:
         """작업 중 상태 설정"""
@@ -388,20 +456,46 @@ class MainWindow(QMainWindow):
         """시그널 연결"""
         # 변환 페이지
         self.convert_page.convert_btn.clicked.connect(self._on_convert)
+        self.convert_page.output_btn.clicked.connect(self._select_output_dir)
+        self.convert_page.progress_card.cancelled.connect(self._cancel_current_worker)
         
         # 병합/분할 페이지
         self.merge_split_page.execute_btn.clicked.connect(self._on_merge_split)
+        self.merge_split_page.progress_card.cancelled.connect(self._cancel_current_worker)
         
         # 데이터 주입 페이지
         self.data_inject_page.template_btn.clicked.connect(self._select_template)
         self.data_inject_page.data_btn.clicked.connect(self._select_data_file)
         self.data_inject_page.execute_btn.clicked.connect(self._on_inject)
+        self.data_inject_page.output_btn.clicked.connect(self._select_output_dir)
+        self.data_inject_page.progress_card.cancelled.connect(self._cancel_current_worker)
         
         # 메타데이터 페이지
         self.metadata_page.execute_btn.clicked.connect(self._on_clean_metadata)
+        self.metadata_page.output_btn.clicked.connect(self._select_output_dir)
+        self.metadata_page.progress_card.cancelled.connect(self._cancel_current_worker)
         
         # 설정 페이지
         self.settings_page.output_btn.clicked.connect(self._select_output_dir)
+        if hasattr(self.settings_page, "theme_preset_changed"):
+            self.settings_page.theme_preset_changed.connect(self._on_theme_preset_changed)
+        if hasattr(self.settings_page, "hyperlink_external_requests_enabled_changed"):
+            self.settings_page.hyperlink_external_requests_enabled_changed.connect(
+                lambda v: self._settings.set("hyperlink_external_requests_enabled", bool(v))
+            )
+        if hasattr(self.settings_page, "hyperlink_timeout_sec_changed"):
+            self.settings_page.hyperlink_timeout_sec_changed.connect(
+                lambda v: self._settings.set("hyperlink_timeout_sec", int(v))
+            )
+        if hasattr(self.settings_page, "hyperlink_domain_allowlist_changed"):
+            self.settings_page.hyperlink_domain_allowlist_changed.connect(
+                lambda v: self._settings.set("hyperlink_domain_allowlist", str(v))
+            )
+
+    @Slot(str)
+    def _on_theme_preset_changed(self, preset: str) -> None:
+        self._settings.set("theme_preset", preset)
+        self._apply_theme_preset(preset)
     
     @Slot(int)
     def _on_page_changed(self, index: int) -> None:
@@ -426,12 +520,14 @@ class MainWindow(QMainWindow):
         self.convert_page.progress_card.setVisible(True)
         self.convert_page.progress_card.set_status("변환 준비 중...")
         self.convert_page.convert_btn.setEnabled(False)
+        self.convert_page.progress_card.reset()
         
         # Worker 시작
         self.set_busy(True)
-        self._current_worker = ConversionWorker(files, target_format)
+        out_dir = str(Path(self._get_default_output_dir()) / "converted" / target_format.lower())
+        self._current_worker = ConversionWorker(files, target_format, output_dir=out_dir)
         self._current_worker.progress.connect(
-            lambda c, t, n: self.convert_page.progress_card.set_count(c, t)
+            lambda c, t, n: (self.convert_page.progress_card.set_count(c, t), self.convert_page.progress_card.set_current_file(n))
         )
         self._current_worker.status_changed.connect(
             lambda s: self.convert_page.progress_card.set_status(s)
@@ -444,6 +540,10 @@ class MainWindow(QMainWindow):
         """변환 완료 콜백"""
         self.set_busy(False)
         self.convert_page.convert_btn.setEnabled(True)
+        if result.data and result.data.get("cancelled"):
+            self.convert_page.progress_card.set_error("작업이 취소되었습니다.")
+            QMessageBox.information(self, "취소", "변환 작업이 취소되었습니다.")
+            return
         
         if result.success:
             data = result.data or {}
@@ -540,6 +640,10 @@ class MainWindow(QMainWindow):
         """병합 완료 콜백"""
         self.set_busy(False)
         self.merge_split_page.execute_btn.setEnabled(True)
+        if result.data and result.data.get("cancelled"):
+            self.merge_split_page.progress_card.set_error("작업이 취소되었습니다.")
+            QMessageBox.information(self, "취소", "병합 작업이 취소되었습니다.")
+            return
         
         if result.success:
             self.merge_split_page.progress_card.set_completed(1, 0)
@@ -553,6 +657,10 @@ class MainWindow(QMainWindow):
         """분할 완료 콜백"""
         self.set_busy(False)
         self.merge_split_page.execute_btn.setEnabled(True)
+        if result.data and result.data.get("cancelled"):
+            self.merge_split_page.progress_card.set_error("작업이 취소되었습니다.")
+            QMessageBox.information(self, "취소", "분할 작업이 취소되었습니다.")
+            return
         
         if result.success:
             data = result.data or {}
@@ -573,7 +681,7 @@ class MainWindow(QMainWindow):
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "템플릿 파일 선택",
-            "",
+            self._get_default_output_dir(),
             "HWP 파일 (*.hwp *.hwpx)"
         )
         if file_path:
@@ -586,7 +694,7 @@ class MainWindow(QMainWindow):
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "데이터 파일 선택",
-            "",
+            self._get_default_output_dir(),
             "Excel 파일 (*.xlsx *.xls);;CSV 파일 (*.csv)"
         )
         if file_path:
@@ -607,55 +715,29 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "알림", "데이터 파일을 선택해주세요.")
             return
         
-        # 출력 디렉토리 선택
-        output_dir = QFileDialog.getExistingDirectory(
-            self, "출력 폴더 선택", self._get_default_output_dir()
-        )
-        if not output_dir:
-            return
-
-        data_rows: list[dict[str, str]] = []
-        
-        # 데이터 파일 읽기
+        # 기본 출력 폴더 정책: 별도 출력 폴더에 저장(덮어쓰기 기본 비활성)
+        output_dir = str(Path(self._get_default_output_dir()) / "data_injected")
         try:
-            from ..core.excel_handler import ExcelHandler
-            handler = ExcelHandler()
-            
-            if data_file.endswith('.csv'):
-                read_result = handler.read_csv(data_file)
-            else:
-                read_result = handler.read_excel(data_file)
-
-            if not read_result.success:
-                QMessageBox.warning(self, "오류", read_result.error_message or "데이터 파일 읽기에 실패했습니다.")
-                return
-
-            if not read_result.data:
-                QMessageBox.warning(self, "알림", "데이터 파일이 비어있습니다.")
-                return
-
-            for row in read_result.data:
-                normalized_row = {
-                    str(key): "" if value is None else str(value)
-                    for key, value in row.items()
-                }
-                data_rows.append(normalized_row)
-                
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            QMessageBox.warning(self, "오류", f"데이터 파일 읽기 실패:\n{e}")
+            QMessageBox.warning(self, "오류", f"출력 폴더 생성 실패:\n{output_dir}\n\n{e}")
             return
         
         self.data_inject_page.progress_card.setVisible(True)
+        self.data_inject_page.progress_card.reset()
         self.data_inject_page.progress_card.set_status("문서 생성 중...")
         self.data_inject_page.execute_btn.setEnabled(False)
         
         # Worker 시작
         self.set_busy(True)
         self._current_worker = DataInjectWorker(
-            template, data_rows, output_dir
+            template, data_file, output_dir
         )
         self._current_worker.progress.connect(
-            lambda c, t, n: self.data_inject_page.progress_card.set_count(c, t)
+            lambda c, t, n: (
+                self.data_inject_page.progress_card.set_count(c, t),
+                self.data_inject_page.progress_card.set_current_file(n),
+            )
         )
         self._current_worker.status_changed.connect(
             lambda s: self.data_inject_page.progress_card.set_status(s)
@@ -668,6 +750,10 @@ class MainWindow(QMainWindow):
         """데이터 주입 완료 콜백"""
         self.set_busy(False)
         self.data_inject_page.execute_btn.setEnabled(True)
+        if result.data and result.data.get("cancelled"):
+            self.data_inject_page.progress_card.set_error("작업이 취소되었습니다.")
+            QMessageBox.information(self, "취소", "데이터 주입 작업이 취소되었습니다.")
+            return
         
         if result.success:
             data = result.data or {}
@@ -696,7 +782,8 @@ class MainWindow(QMainWindow):
         
         # Worker 시작
         self.set_busy(True)
-        self._current_worker = MetadataCleanWorker(files)
+        out_dir = str(Path(self._get_default_output_dir()) / "metadata_cleaned")
+        self._current_worker = MetadataCleanWorker(files, output_dir=out_dir)
         self._current_worker.progress.connect(
             lambda c, t, n: self.metadata_page.progress_card.set_count(c, t)
         )
@@ -711,6 +798,10 @@ class MainWindow(QMainWindow):
         """메타데이터 정리 완료 콜백"""
         self.set_busy(False)
         self.metadata_page.execute_btn.setEnabled(True)
+        if result.data and result.data.get("cancelled"):
+            self.metadata_page.progress_card.set_error("작업이 취소되었습니다.")
+            QMessageBox.information(self, "취소", "메타정보 정리 작업이 취소되었습니다.")
+            return
         
         if result.success:
             data = result.data or {}
@@ -735,3 +826,7 @@ class MainWindow(QMainWindow):
         if dir_path:
             self._settings.set("default_output_dir", dir_path)
             self.settings_page.output_label.setText(dir_path)
+            # 페이지들도 동기화
+            self.convert_page.output_label.setText(dir_path)
+            self.metadata_page.output_label.setText(dir_path)
+            self.data_inject_page.output_label.setText(dir_path)

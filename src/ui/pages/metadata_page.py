@@ -35,6 +35,17 @@ class MetadataPage(QWidget):
         # 파일 목록
         self.file_list = FileListWidget()
         layout.addWidget(self.file_list)
+
+        # 출력 폴더
+        output_layout = QHBoxLayout()
+        output_layout.addWidget(QLabel("기본 출력 폴더:"))
+        self.output_label = QLabel("")
+        self.output_label.setStyleSheet("color: #8b949e;")
+        output_layout.addWidget(self.output_label, 1)
+        self.output_btn = QPushButton("변경...")
+        self.output_btn.setProperty("class", "secondary")
+        output_layout.addWidget(self.output_btn)
+        layout.addLayout(output_layout)
         
         # 옵션 체크박스들 (간단한 라벨로 대체)
         options_label = QLabel("✓ 작성자 정보 제거  ✓ 메모 삭제  ✓ 변경 추적 제거  ✓ 배포용 설정")

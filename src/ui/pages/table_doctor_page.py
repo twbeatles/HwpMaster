@@ -19,6 +19,8 @@ from PySide6.QtGui import QFont
 from ...core.table_doctor import TableDoctor, TableStyle
 from ..widgets.file_list import FileListWidget
 from ..widgets.progress_card import ProgressCard
+from ...utils.worker import TableDoctorWorker, WorkerResult
+from ...utils.settings import get_settings_manager
 
 
 class TableStyleCard(QFrame):
@@ -67,6 +69,8 @@ class TableDoctorPage(QWidget):
         
         self._table_doctor = TableDoctor()
         self._selected_style: Optional[TableStyle] = None
+        self._worker: Optional[TableDoctorWorker] = None
+        self._settings = get_settings_manager()
         
         self._setup_ui()
     
@@ -233,7 +237,7 @@ class TableDoctorPage(QWidget):
         output_dir = QFileDialog.getExistingDirectory(
             self,
             "저장 위치 선택",
-            str(Path.home() / "Documents")
+            self._settings.get("default_output_dir", str(Path.home() / "Documents"))
         )
         
         if not output_dir:
@@ -241,29 +245,52 @@ class TableDoctorPage(QWidget):
         
         self.progress_card.setVisible(True)
         self.progress_card.set_status("표 스타일 적용 중...")
+        self.progress_card.reset()
+        self.apply_btn.setEnabled(False)
+        self.scan_btn.setEnabled(False)
         
-        try:
-            results = self._table_doctor.batch_apply_style(
-                files,
-                self._selected_style,
-                output_dir,
-                progress_callback=lambda c, t, n: self.progress_card.set_count(c, t)
-            )
-            
-            total_tables = sum(r.tables_fixed for r in results)
-            success = sum(1 for r in results if r.success)
-            
-            self.progress_card.set_completed(success, len(results) - success)
-            
+        if self._worker is not None:
+            try:
+                self.progress_card.cancelled.disconnect(self._worker.cancel)
+            except TypeError:
+                pass
+
+        self._worker = TableDoctorWorker(files, self._selected_style, output_dir)
+        self.progress_card.cancelled.connect(self._worker.cancel)
+        self._worker.progress.connect(lambda c, t, n: (self.progress_card.set_count(c, t), self.progress_card.set_current_file(n)))
+        self._worker.status_changed.connect(self.progress_card.set_status)
+        self._worker.finished_with_result.connect(self._on_apply_finished)
+        self._worker.error_occurred.connect(self._on_apply_error)
+        self._worker.start()
+
+    def _on_apply_finished(self, result: WorkerResult) -> None:
+        self.apply_btn.setEnabled(True)
+        self.scan_btn.setEnabled(True)
+
+        data = result.data or {}
+        if data.get("cancelled"):
+            self.progress_card.set_error("작업이 취소되었습니다.")
+            return
+
+        if result.success:
+            success = data.get("success_count", 0)
+            fail = data.get("fail_count", 0)
+            tables_fixed = data.get("tables_fixed", 0)
+            out_dir = data.get("output_dir", "")
+            self.progress_card.set_completed(success, fail)
             QMessageBox.information(
                 self,
                 "완료",
                 f"표 스타일 적용이 완료되었습니다.\n\n"
-                f"처리 파일: {len(results)}개\n"
-                f"수정된 표: {total_tables}개\n"
-                f"저장 위치: {output_dir}"
+                f"처리 파일: {success + fail}개\n"
+                f"수정된 표: {tables_fixed}개\n"
+                f"저장 위치: {out_dir}"
             )
-            
-        except Exception as e:
-            self.progress_card.set_error(str(e))
-            QMessageBox.warning(self, "오류", f"표 스타일 적용 중 오류:\n{e}")
+        else:
+            self.progress_card.set_error(result.error_message or "오류 발생")
+            QMessageBox.warning(self, "오류", result.error_message or "표 스타일 적용 중 오류가 발생했습니다.")
+
+    def _on_apply_error(self, message: str) -> None:
+        self.apply_btn.setEnabled(True)
+        self.scan_btn.setEnabled(True)
+        self.progress_card.set_error(message)

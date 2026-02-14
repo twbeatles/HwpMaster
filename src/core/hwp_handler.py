@@ -100,6 +100,15 @@ class HwpHandler:
     def convert_to_jpg(self, source_path: str, output_path: Optional[str] = None) -> ConversionResult:
         """HWP를 JPG로 변환 (첫 페이지)"""
         return self._convert(source_path, ConvertFormat.JPG, output_path)
+
+    def convert(
+        self,
+        source_path: str,
+        target_format: ConvertFormat,
+        output_path: Optional[str] = None,
+    ) -> ConversionResult:
+        """Public convert API (worker에서 private _convert 직접 호출 방지)."""
+        return self._convert(source_path, target_format, output_path)
     
     def _convert(
         self, 
@@ -183,9 +192,12 @@ class HwpHandler:
                 
                 # 출력 경로 결정
                 if output_dir:
-                    output_path = str(
-                        Path(output_dir) / 
-                        Path(source_path).with_suffix(f".{target_format.value}").name
+                    from ..utils.output_paths import resolve_output_path
+
+                    output_path = resolve_output_path(
+                        output_dir,
+                        source_path,
+                        new_ext=target_format.value,
                     )
                 else:
                     output_path = None
@@ -514,7 +526,9 @@ class HwpHandler:
                 
                 # 파일명 결정
                 if filename_field and filename_field in data:
-                    safe_name = re.sub(r'[<>:"/\\|?*]', '_', str(data[filename_field]))
+                    from ..utils.filename_sanitizer import sanitize_filename
+
+                    safe_name = sanitize_filename(str(data[filename_field]))
                     output_name = f"{safe_name}.hwp"
                 else:
                     output_name = f"{template.stem}_{idx:04d}.hwp"
