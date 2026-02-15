@@ -15,6 +15,7 @@ from PySide6.QtCore import Qt
 
 from ..widgets.file_list import FileListWidget
 from ..widgets.progress_card import ProgressCard
+from ..widgets.page_header import PageHeader
 from ..widgets.toast import get_toast_manager
 from ...utils.settings import get_settings_manager
 
@@ -33,14 +34,13 @@ class BookmarkPage(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(24)
         
-        # 헤더
-        header = QLabel("🔖 북마크 관리")
-        header.setStyleSheet("font-size: 28px; font-weight: bold; color: #e6edf3;")
-        layout.addWidget(header)
-        
-        desc = QLabel("문서 내 북마크를 추출, 편집, 삭제합니다.")
-        desc.setStyleSheet("font-size: 14px; color: #8b949e;")
-        layout.addWidget(desc)
+        # 페이지 헤더
+        page_header = PageHeader(
+            "북마크 관리",
+            "문서 내 북마크를 추출, 편집, 삭제합니다.",
+            "🔖"
+        )
+        layout.addWidget(page_header)
         
         # 메인 레이아웃
         main_layout = QHBoxLayout()

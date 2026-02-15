@@ -19,6 +19,7 @@ from PySide6.QtGui import QFont
 from ...core.table_doctor import TableDoctor, TableStyle
 from ..widgets.file_list import FileListWidget
 from ..widgets.progress_card import ProgressCard
+from ..widgets.page_header import PageHeader
 from ...utils.worker import TableDoctorWorker, WorkerResult
 from ...utils.settings import get_settings_manager
 
@@ -79,15 +80,13 @@ class TableDoctorPage(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(20)
         
-        title = QLabel("🩺 표 도우미")
-        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
-        layout.addWidget(title)
-        
-        subtitle = QLabel("깨지거나 제멋대로인 표의 테두리, 셀 여백을 규정에 맞게 치료합니다")
-        subtitle.setProperty("class", "subtitle")
-        layout.addWidget(subtitle)
-        
-        layout.addSpacing(16)
+        # 페이지 헤더
+        header = PageHeader(
+            "표 도우미",
+            "깨지거나 제멋대로인 표의 테두리, 셀 여백을 규정에 맞게 치료합니다",
+            "🩺"
+        )
+        layout.addWidget(header)
         
         main_layout = QHBoxLayout()
         main_layout.setSpacing(24)

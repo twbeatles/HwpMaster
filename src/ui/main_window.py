@@ -81,6 +81,7 @@ class Sidebar(QFrame):
         self._is_collapsed = False
         self._buttons: list[SidebarButton] = []
         self._nav_items: list[tuple[str, str]] = []
+        self._section_labels: list[QLabel] = []
         
         # 메인 레이아웃 (여백 없음)
         main_layout = QVBoxLayout(self)
@@ -167,6 +168,7 @@ class Sidebar(QFrame):
                     padding: 12px 10px 6px 10px;
                     background: transparent;
                 """)
+                self._section_labels.append(section_label)
                 self._scroll_layout.addWidget(section_label)
             
             for icon, text in items:
@@ -251,13 +253,18 @@ class Sidebar(QFrame):
         self._title_label.setVisible(not self._is_collapsed)
         self._version_label.setVisible(not self._is_collapsed)
         
-        # 버튼 텍스트 토글
+        # 섹션 라벨 토글
+        for label in self._section_labels:
+            label.setVisible(not self._is_collapsed)
+        
+        # 버튼 텍스트 & 툴팁 토글
         for btn, (icon, text) in zip(self._buttons, self._nav_items):
             if self._is_collapsed:
                 btn.setText(f"  {icon}")
+                btn.setToolTip(text)
             else:
                 btn.setText(f"  {icon}  {text}")
-
+                btn.setToolTip("")
 
 
 from .pages import (

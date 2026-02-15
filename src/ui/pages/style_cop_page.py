@@ -20,6 +20,7 @@ from PySide6.QtGui import QFont
 from ...core.style_cop import StyleCop, StyleRule
 from ..widgets.file_list import FileListWidget
 from ..widgets.progress_card import ProgressCard
+from ..widgets.page_header import PageHeader
 from ...utils.worker import StyleCopWorker, WorkerResult
 from ...utils.settings import get_settings_manager
 
@@ -82,16 +83,13 @@ class StyleCopPage(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(20)
         
-        # 제목
-        title = QLabel("👮 서식 도우미")
-        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
-        layout.addWidget(title)
-        
-        subtitle = QLabel("문서의 폰트, 크기, 줄간격을 규정에 맞게 일괄 통일합니다")
-        subtitle.setProperty("class", "subtitle")
-        layout.addWidget(subtitle)
-        
-        layout.addSpacing(16)
+        # 페이지 헤더
+        header = PageHeader(
+            "서식 도우미",
+            "문서의 폰트, 크기, 줄간격을 규정에 맞게 일괄 통일합니다",
+            "👮"
+        )
+        layout.addWidget(header)
         
         # 메인 영역 (2컬럼)
         main_layout = QHBoxLayout()

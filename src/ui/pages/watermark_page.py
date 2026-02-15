@@ -16,6 +16,7 @@ from PySide6.QtCore import Qt, Signal
 
 from ..widgets.file_list import FileListWidget
 from ..widgets.progress_card import ProgressCard
+from ..widgets.page_header import PageHeader
 from ..widgets.toast import get_toast_manager, ToastType
 from ...utils.settings import get_settings_manager
 
@@ -85,14 +86,13 @@ class WatermarkPage(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(24)
         
-        # 헤더
-        header = QLabel("💧 워터마크")
-        header.setStyleSheet("font-size: 28px; font-weight: bold; color: #e6edf3;")
+        # 페이지 헤더
+        header = PageHeader(
+            "워터마크",
+            "문서에 텍스트 또는 이미지 워터마크를 일괄 삽입합니다.",
+            "💧"
+        )
         layout.addWidget(header)
-        
-        desc = QLabel("문서에 텍스트 또는 이미지 워터마크를 일괄 삽입합니다.")
-        desc.setStyleSheet("font-size: 14px; color: #8b949e;")
-        layout.addWidget(desc)
         
         # 프리셋 섹션
         preset_group = QGroupBox("빠른 프리셋")

@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushBu
 from PySide6.QtGui import QFont
 
 from ..widgets.progress_card import ProgressCard
+from ..widgets.page_header import PageHeader
 
 
 class DataInjectPage(QWidget):
@@ -20,16 +21,13 @@ class DataInjectPage(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(20)
         
-        # 제목
-        title = QLabel("📝 데이터 자동 입력")
-        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
-        layout.addWidget(title)
-        
-        subtitle = QLabel("Excel 데이터를 HWP 템플릿에 자동으로 입력합니다")
-        subtitle.setProperty("class", "subtitle")
-        layout.addWidget(subtitle)
-        
-        layout.addSpacing(20)
+        # 페이지 헤더
+        header = PageHeader(
+            "데이터 자동 입력",
+            "Excel 데이터를 HWP 템플릿에 자동으로 입력합니다",
+            "📝"
+        )
+        layout.addWidget(header)
         
         # 템플릿 선택
         template_layout = QHBoxLayout()

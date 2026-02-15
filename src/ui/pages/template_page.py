@@ -18,6 +18,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
 from ...core.template_store import TemplateStore, TemplateInfo
+from ..widgets.page_header import PageHeader
 from ...utils.settings import get_settings_manager
 
 
@@ -233,16 +234,13 @@ class TemplatePage(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(20)
         
-        # 제목
-        title = QLabel("📦 스마트 템플릿 스토어")
-        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
-        layout.addWidget(title)
-        
-        subtitle = QLabel("자주 사용하는 공문서 양식을 클릭 한 번으로 불러오세요")
-        subtitle.setProperty("class", "subtitle")
-        layout.addWidget(subtitle)
-        
-        layout.addSpacing(16)
+        # 페이지 헤더
+        page_header = PageHeader(
+            "스마트 템플릿 스토어",
+            "자주 사용하는 공문서 양식을 클릭 한 번으로 불러오세요",
+            "📦"
+        )
+        layout.addWidget(page_header)
         
         # 필터 영역
         filter_layout = QHBoxLayout()

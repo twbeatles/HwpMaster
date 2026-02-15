@@ -19,6 +19,7 @@ from PySide6.QtGui import QFont
 
 from ..widgets.file_list import FileListWidget
 from ..widgets.progress_card import ProgressCard
+from ..widgets.page_header import PageHeader
 
 
 class ConvertPage(QWidget):
@@ -31,16 +32,13 @@ class ConvertPage(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(20)
 
-        # 제목
-        title = QLabel("🔄 스마트 일괄 변환")
-        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
-        layout.addWidget(title)
-
-        subtitle = QLabel("HWP 파일을 다양한 포맷으로 일괄 변환합니다")
-        subtitle.setProperty("class", "subtitle")
-        layout.addWidget(subtitle)
-
-        layout.addSpacing(20)
+        # 페이지 헤더
+        header = PageHeader(
+            "스마트 일괄 변환",
+            "HWP 파일을 다양한 포맷으로 일괄 변환합니다",
+            "🔄"
+        )
+        layout.addWidget(header)
 
         # 파일 목록 위젯
         self.file_list = FileListWidget()

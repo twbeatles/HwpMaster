@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from ..widgets.file_list import FileListWidget
+from ..widgets.page_header import PageHeader
 from ..widgets.toast import get_toast_manager
 
 
@@ -34,14 +35,13 @@ class ImageExtractorPage(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(24)
         
-        # 헤더
-        header = QLabel("🖼️ 이미지 추출")
-        header.setStyleSheet("font-size: 28px; font-weight: bold; color: #e6edf3;")
-        layout.addWidget(header)
-        
-        desc = QLabel("문서 내 모든 이미지를 개별 파일로 추출합니다.")
-        desc.setStyleSheet("font-size: 14px; color: #8b949e;")
-        layout.addWidget(desc)
+        # 페이지 헤더
+        page_header = PageHeader(
+            "이미지 추출",
+            "문서 내 모든 이미지를 개별 파일로 추출합니다.",
+            "🖼️"
+        )
+        layout.addWidget(page_header)
         
         # 메인 레이아웃
         main_layout = QHBoxLayout()

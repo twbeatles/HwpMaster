@@ -18,6 +18,7 @@ from PySide6.QtGui import QFont
 
 from ...core.doc_diff import DocDiff, ChangeType
 from ..widgets.progress_card import ProgressCard
+from ..widgets.page_header import PageHeader
 from ...utils.worker import DocDiffWorker, WorkerResult
 from ...utils.settings import get_settings_manager
 
@@ -41,15 +42,13 @@ class DocDiffPage(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(20)
         
-        title = QLabel("📊 문서 비교")
-        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
-        layout.addWidget(title)
-        
-        subtitle = QLabel("수정 전후 파일의 텍스트 차이점을 분석하여 리포트를 생성합니다")
-        subtitle.setProperty("class", "subtitle")
-        layout.addWidget(subtitle)
-        
-        layout.addSpacing(16)
+        # 페이지 헤더
+        header = PageHeader(
+            "문서 비교",
+            "수정 전후 파일의 텍스트 차이점을 분석하여 리포트를 생성합니다",
+            "📊"
+        )
+        layout.addWidget(header)
         
         # 파일 선택 영역
         files_layout = QHBoxLayout()

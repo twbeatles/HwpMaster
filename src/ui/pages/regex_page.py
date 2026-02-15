@@ -21,6 +21,7 @@ from PySide6.QtGui import QFont
 from ...core.regex_replacer import RegexReplacer, ReplacementRule
 from ..widgets.file_list import FileListWidget
 from ..widgets.progress_card import ProgressCard
+from ..widgets.page_header import PageHeader
 from ...utils.worker import RegexReplaceWorker, WorkerResult
 from ...utils.settings import get_settings_manager
 
@@ -83,16 +84,13 @@ class RegexPage(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(20)
         
-        # 제목
-        title = QLabel("🔤 정규식 치환기")
-        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
-        layout.addWidget(title)
-        
-        subtitle = QLabel("패턴 기반으로 텍스트를 찾아 치환합니다 (민감정보 마스킹 등)")
-        subtitle.setProperty("class", "subtitle")
-        layout.addWidget(subtitle)
-        
-        layout.addSpacing(16)
+        # 페이지 헤더
+        header = PageHeader(
+            "정규식 치환기",
+            "패턴 기반으로 텍스트를 찾아 치환합니다 (민감정보 마스킹 등)",
+            "🔤"
+        )
+        layout.addWidget(header)
         
         # 메인 영역 (2컬럼)
         main_layout = QHBoxLayout()

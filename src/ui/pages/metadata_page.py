@@ -9,6 +9,7 @@ from PySide6.QtGui import QFont
 
 from ..widgets.file_list import FileListWidget
 from ..widgets.progress_card import ProgressCard
+from ..widgets.page_header import PageHeader
 
 
 class MetadataPage(QWidget):
@@ -21,16 +22,13 @@ class MetadataPage(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(20)
         
-        # 제목
-        title = QLabel("🧹 메타정보 정리")
-        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
-        layout.addWidget(title)
-        
-        subtitle = QLabel("문서의 민감한 메타정보를 일괄 삭제합니다")
-        subtitle.setProperty("class", "subtitle")
-        layout.addWidget(subtitle)
-        
-        layout.addSpacing(20)
+        # 페이지 헤더
+        header = PageHeader(
+            "메타정보 정리",
+            "문서의 민감한 메타정보를 일괄 삭제합니다",
+            "🧹"
+        )
+        layout.addWidget(header)
         
         # 파일 목록
         self.file_list = FileListWidget()

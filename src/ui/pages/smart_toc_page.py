@@ -19,6 +19,7 @@ from PySide6.QtGui import QFont
 
 from ...core.smart_toc import SmartTOC, TocEntry
 from ..widgets.progress_card import ProgressCard
+from ..widgets.page_header import PageHeader
 from ...utils.worker import SmartTocWorker, WorkerResult
 from ...utils.settings import get_settings_manager
 
@@ -42,15 +43,13 @@ class SmartTocPage(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(20)
         
-        title = QLabel("📑 자동 목차")
-        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
-        layout.addWidget(title)
-        
-        subtitle = QLabel("글자 크기와 패턴을 분석하여 자동으로 목차를 추출합니다")
-        subtitle.setProperty("class", "subtitle")
-        layout.addWidget(subtitle)
-        
-        layout.addSpacing(16)
+        # 페이지 헤더
+        header = PageHeader(
+            "자동 목차",
+            "글자 크기와 패턴을 분석하여 자동으로 목차를 추출합니다",
+            "📑"
+        )
+        layout.addWidget(header)
         
         # 파일 선택
         file_group = QGroupBox("📄 대상 파일")

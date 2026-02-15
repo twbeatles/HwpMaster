@@ -20,6 +20,7 @@ from PySide6.QtGui import QFont, QColor
 
 from ...core.macro_recorder import MacroRecorder, MacroInfo, MacroAction
 from ..widgets.progress_card import ProgressCard
+from ..widgets.page_header import PageHeader
 from ...utils.worker import MacroRunWorker, WorkerResult
 from ...utils.settings import get_settings_manager
 
@@ -174,16 +175,13 @@ class MacroPage(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(20)
         
-        # 제목
-        title = QLabel("🎬 HWP 매크로 레코더")
-        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
-        layout.addWidget(title)
-        
-        subtitle = QLabel("반복적인 HWP 작업을 매크로로 자동화하세요")
-        subtitle.setProperty("class", "subtitle")
-        layout.addWidget(subtitle)
-        
-        layout.addSpacing(16)
+        # 페이지 헤더
+        header = PageHeader(
+            "HWP 매크로 레코더",
+            "반복적인 HWP 작업을 매크로로 자동화하세요",
+            "🎬"
+        )
+        layout.addWidget(header)
         
         # 메인 영역 (스플리터)
         splitter = QSplitter(Qt.Orientation.Horizontal)

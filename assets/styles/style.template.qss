@@ -725,3 +725,22 @@ QMessageBox QLabel {
     font-size: 14px;
     min-width: 300px;
 }
+
+/* ==================== Settings Group ==================== */
+QGroupBox[class="settings-group"] {
+    background-color: {{background}};
+    border: 1px solid {{surface_muted}};
+    border-radius: 12px;
+    margin-top: 8px;
+    padding: 24px 20px 16px 20px;
+}
+
+QGroupBox[class="settings-group"]::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 4px 12px;
+    background-color: {{surface}};
+    border: 1px solid {{border}};
+    border-radius: 6px;
+    color: {{text_primary}};
+}

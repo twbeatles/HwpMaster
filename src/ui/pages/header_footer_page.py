@@ -15,6 +15,7 @@ from PySide6.QtCore import Qt, Signal
 
 from ..widgets.file_list import FileListWidget
 from ..widgets.progress_card import ProgressCard
+from ..widgets.page_header import PageHeader
 from ..widgets.toast import get_toast_manager
 from ...utils.settings import get_settings_manager
 
@@ -69,14 +70,13 @@ class HeaderFooterPage(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(24)
         
-        # 헤더
-        header = QLabel("📄 헤더/푸터 관리")
-        header.setStyleSheet("font-size: 28px; font-weight: bold; color: #e6edf3;")
-        layout.addWidget(header)
-        
-        desc = QLabel("페이지 번호, 문서명, 날짜 등을 일괄 삽입합니다.")
-        desc.setStyleSheet("font-size: 14px; color: #8b949e;")
-        layout.addWidget(desc)
+        # 페이지 헤더
+        page_header = PageHeader(
+            "헤더/푸터 관리",
+            "페이지 번호, 문서명, 날짜 등을 일괄 삽입합니다.",
+            "📄"
+        )
+        layout.addWidget(page_header)
         
         # 프리셋
         preset_layout = QHBoxLayout()

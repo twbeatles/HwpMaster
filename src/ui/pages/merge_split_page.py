@@ -12,6 +12,7 @@ from PySide6.QtGui import QFont
 
 from ..widgets.file_list import FileListWidget
 from ..widgets.progress_card import ProgressCard
+from ..widgets.page_header import PageHeader
 
 
 class MergeSplitPage(QWidget):
@@ -24,16 +25,13 @@ class MergeSplitPage(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(20)
         
-        # 제목
-        title = QLabel("📎 문서 병합/분할")
-        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
-        layout.addWidget(title)
-        
-        subtitle = QLabel("여러 HWP 파일을 병합하거나 페이지별로 분할합니다")
-        subtitle.setProperty("class", "subtitle")
-        layout.addWidget(subtitle)
-        
-        layout.addSpacing(20)
+        # 페이지 헤더
+        header = PageHeader(
+            "문서 병합/분할",
+            "여러 HWP 파일을 병합하거나 페이지별로 분할합니다",
+            "📎"
+        )
+        layout.addWidget(header)
         
         # 탭 버튼
         tab_layout = QHBoxLayout()
