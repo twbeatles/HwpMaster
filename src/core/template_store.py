@@ -1,4 +1,4 @@
-"""
+﻿"""
 Template Store Module
 스마트 템플릿 스토어 - 공문서 양식 관리
 
@@ -175,6 +175,7 @@ class TemplateStore:
     
     def _init_builtin_templates(self) -> None:
         """내장 템플릿 초기화"""
+        changed = False
         for builtin in self.BUILTIN_TEMPLATES:
             template_id = builtin["id"]
             if template_id not in self._templates:
@@ -188,7 +189,9 @@ class TemplateStore:
                     is_builtin=True,
                     fields=builtin.get("fields", [])
                 )
-        self._save_metadata()
+                changed = True
+        if changed:
+            self._save_metadata()
     
     def get_all_templates(self) -> list[TemplateInfo]:
         """모든 템플릿 목록 반환"""

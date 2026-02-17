@@ -1,4 +1,4 @@
-"""
+﻿"""
 Hyperlink Page
 하이퍼링크 검사 UI 페이지
 
@@ -7,10 +7,20 @@ Author: HWP Master
 
 from typing import Optional
 from pathlib import Path
+
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QTableWidget, QTableWidgetItem,
-    QGroupBox, QHeaderView, QFileDialog, QProgressBar, QMessageBox
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QGroupBox,
+    QHeaderView,
+    QFileDialog,
+    QProgressBar,
+    QMessageBox,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -24,7 +34,7 @@ from ...core.hyperlink_checker import HyperlinkChecker
 
 class HyperlinkPage(QWidget):
     """하이퍼링크 검사 페이지"""
-    
+
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.temp_dir: str = ""
@@ -32,41 +42,36 @@ class HyperlinkPage(QWidget):
         self._settings = get_settings_manager()
         self._links: list[tuple[str, object]] = []
         self._setup_ui()
-    
+
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(24)
-        
-        # 페이지 헤더
+
         page_header = PageHeader(
             "하이퍼링크 검사",
             "문서 내 링크를 추출하고 유효성을 검사합니다.",
-            "🔗"
+            "🔗",
         )
         layout.addWidget(page_header)
-        
-        # 메인 레이아웃
+
         main_layout = QHBoxLayout()
         main_layout.setSpacing(24)
-        
-        # 파일 선택
+
         file_group = QGroupBox("문서 선택")
         file_layout = QVBoxLayout(file_group)
         self.file_list = FileListWidget()
         file_layout.addWidget(self.file_list)
-        
+
         self.scan_btn = QPushButton("링크 검사 시작")
         self.scan_btn.clicked.connect(self._on_scan)
         file_layout.addWidget(self.scan_btn)
-        
+
         main_layout.addWidget(file_group)
-        
-        # 검사 결과
+
         result_group = QGroupBox("검사 결과")
         result_layout = QVBoxLayout(result_group)
-        
-        # 통계
+
         stats_layout = QHBoxLayout()
         self.total_label = QLabel("총 링크: 0개")
         self.valid_label = QLabel("유효: 0개")
@@ -78,13 +83,11 @@ class HyperlinkPage(QWidget):
         stats_layout.addWidget(self.broken_label)
         stats_layout.addStretch()
         result_layout.addLayout(stats_layout)
-        
-        # 진행률
+
         self.progress = QProgressBar()
         self.progress.setVisible(False)
         result_layout.addWidget(self.progress)
-        
-        # 테이블
+
         self.link_table = QTableWidget()
         self.link_table.setColumnCount(4)
         self.link_table.setHorizontalHeaderLabels(["상태", "URL", "텍스트", "오류"])
@@ -93,23 +96,20 @@ class HyperlinkPage(QWidget):
         self.link_table.setColumnWidth(2, 150)
         self.link_table.setColumnWidth(3, 150)
         result_layout.addWidget(self.link_table)
-        
-        # 버튼
+
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        
+
         self.export_btn = QPushButton("리포트 저장")
         self.export_btn.clicked.connect(self._on_export)
         btn_layout.addWidget(self.export_btn)
-        
+
         result_layout.addLayout(btn_layout)
         main_layout.addWidget(result_group, 1)
-        
+
         layout.addLayout(main_layout)
-    
-    
+
     def _on_scan(self) -> None:
-        """링크 검사 시작"""
         files = self.file_list.get_files()
         if not files:
             get_toast_manager().warning("파일을 추가해주세요.")
@@ -121,8 +121,8 @@ class HyperlinkPage(QWidget):
             reply = QMessageBox.warning(
                 self,
                 "외부 접속 안내",
-                "하이퍼링크 검사는 문서에 포함된 외부 URL에 실제로 접속할 수 있습니다.\n"
-                "보안/프라이버시 정책에 따라 외부 접속이 제한될 수 있습니다.\n\n"
+                "하이퍼링크 검사는 문서의 외부 URL에 실제 접속할 수 있습니다.\n"
+                "보안/개인정보 정책에 따라 제한이 필요할 수 있습니다.\n\n"
                 "계속 진행하시겠습니까?",
                 QMessageBox.StandardButton.Yes
                 | QMessageBox.StandardButton.No
@@ -135,23 +135,20 @@ class HyperlinkPage(QWidget):
                 external_enabled = False
                 self._settings.set("hyperlink_external_requests_enabled", False)
             self._settings.set("hyperlink_privacy_notice_shown", True)
-        
+
         self.link_table.setRowCount(0)
         self.progress.setVisible(True)
+        self.progress.setValue(0)
         self.scan_btn.setEnabled(False)
         self.export_btn.setEnabled(False)
-        
+
         from ...utils.worker import HyperlinkWorker
-        # 리포트 저장을 위한 임시 폴더 혹은 사용자 선택?
-        # 예제에서는 검사 후 내보내기를 따로 하므로, 검사 단계에서는 report 생성을 안 하거나 임시 폴더 사용
-        # 여기서는 report 생성 없이 검사만 수행 (Worker 수정 필요할 수도 있음, output_dir 필수인지 확인)
-        # Worker: __init__(files, output_dir)
-        # output_dir이 필수라면 임시 폴더 사용
         import tempfile
+
         self.temp_dir = tempfile.mkdtemp()
-        
         timeout_sec = int(self._settings.get("hyperlink_timeout_sec", 5))
         allowlist = str(self._settings.get("hyperlink_domain_allowlist", ""))
+
         self.worker = HyperlinkWorker(
             files,
             self.temp_dir,
@@ -165,46 +162,50 @@ class HyperlinkPage(QWidget):
         self.worker.start()
 
     def _on_progress(self, current: int, total: int, message: str) -> None:
-        self.progress.setValue(int(current / total * 100))
+        if total > 0:
+            self.progress.setValue(int(current / total * 100))
         self.total_label.setText(f"검사 중: {message}")
-        
+
+    def _populate_link_table(self, links: list[tuple[str, object]]) -> None:
+        self.link_table.setUpdatesEnabled(False)
+        self.link_table.setRowCount(len(links))
+
+        for row, (_, link) in enumerate(links):
+            ok = getattr(link.status, "value", "") in ["valid", "local_ok"]
+            status_text = "✅" if ok else "❌"
+            status_color = "#3fb950" if ok else "#f85149"
+
+            status_item = QTableWidgetItem(status_text)
+            status_item.setForeground(QColor(status_color))
+            self.link_table.setItem(row, 0, status_item)
+            self.link_table.setItem(row, 1, QTableWidgetItem(getattr(link, "url", "")))
+            self.link_table.setItem(row, 2, QTableWidgetItem(getattr(link, "text", "")))
+            self.link_table.setItem(row, 3, QTableWidgetItem(getattr(link, "error_message", "")))
+
+        self.link_table.setUpdatesEnabled(True)
+
     def _on_finished(self, result) -> None:
         self.progress.setVisible(False)
         self.scan_btn.setEnabled(True)
         self.export_btn.setEnabled(True)
-        
+
         if result.success:
-            links = result.data.get("links", [])
+            links = (result.data or {}).get("links", [])
             self._links = links
-            valid_count = result.data.get("success_count", 0) # 문서 성공 개수가 아니라 링크 성공 개수? 
-            # Worker에서 success_count는 성공한 *파일* 수, total_links는 *링크* 수
-            # Data: success_count, total_links, links
-            
-            # 링크 데이터를 기반으로 카운트 다시 계산
+
             total = len(links)
-            valid = sum(1 for _, l in links if l.status.value in ["valid", "local_ok"])
-            broken = sum(1 for _, l in links if l.status.value in ["broken", "local_missing", "timeout"])
-            
+            valid = sum(1 for _, l in links if getattr(l.status, "value", "") in ["valid", "local_ok"])
+            broken = sum(
+                1
+                for _, l in links
+                if getattr(l.status, "value", "") in ["broken", "local_missing", "timeout"]
+            )
+
             self.total_label.setText(f"총 링크: {total}개")
             self.valid_label.setText(f"유효: {valid}개")
             self.broken_label.setText(f"오류: {broken}개")
-            
-            # 테이블 채우기
-            self.link_table.setRowCount(0)
-            for fname, link in links:
-                row = self.link_table.rowCount()
-                self.link_table.insertRow(row)
-                
-                status_text = "✓" if link.status.value in ["valid", "local_ok"] else "✗"
-                status_color = "#3fb950" if link.status.value in ["valid", "local_ok"] else "#f85149"
-                
-                status_item = QTableWidgetItem(status_text)
-                status_item.setForeground(QColor(status_color))
-                self.link_table.setItem(row, 0, status_item)
-                self.link_table.setItem(row, 1, QTableWidgetItem(link.url))
-                self.link_table.setItem(row, 2, QTableWidgetItem(link.text))
-                self.link_table.setItem(row, 3, QTableWidgetItem(link.error_message))
-            
+
+            self._populate_link_table(links)
             get_toast_manager().success("링크 검사 완료")
         else:
             get_toast_manager().error(f"오류: {result.error_message}")
@@ -212,68 +213,61 @@ class HyperlinkPage(QWidget):
     def _on_error(self, message: str) -> None:
         get_toast_manager().error(f"작업 중 오류 발생: {message}")
 
-    
     def _on_export(self) -> None:
-        """리포트 저장 (HTML)"""
-        # 현재 테이블 내용을 기반으로 리포트 생성 또는 Worker가 생성한 리포트 활용?
-        # Worker는 개별 파일 리포트를 생성함. 
-        # 여기서는 "통합 리포트"를 원하는지, 개별 리포트를 원하는지?
-        # mock code는 saveFileName으로 하나의 파일을 요구함.
-        # 통합 리포트를 생성해서 저장하는 것이 좋음.
-        
         if self.link_table.rowCount() == 0:
             get_toast_manager().warning("검사 결과가 없습니다.")
             return
-            
+
         default_dir = self._settings.get("default_output_dir", "")
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "리포트 저장",
             str(Path(default_dir) / "hyperlink_report.xlsx") if default_dir else "",
-            "Excel 파일 (*.xlsx);;HTML 파일 (*.html)"
+            "Excel 파일 (*.xlsx);;HTML 파일 (*.html)",
         )
-        if file_path:
-            try:
-                import html
-                if file_path.lower().endswith(".xlsx"):
-                    checker = HyperlinkChecker()
-                    ok = checker.export_links_to_excel(self._links, file_path)
-                    if not ok:
-                        raise RuntimeError("엑셀 저장 실패")
-                    get_toast_manager().success(f"엑셀 저장 완료: {file_path}")
-                    return
+        if not file_path:
+            return
 
-                # 간단한 통합 HTML 리포트 생성
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write("<html><head><meta charset='utf-8'><style>")
-                    f.write("table { border-collapse: collapse; width: 100%; }")
-                    f.write("th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }")
-                    f.write(".valid { color: green; } .broken { color: red; }")
-                    f.write("</style></head><body>")
-                    f.write(f"<h1>링크 검사 결과 ({html.escape(self.total_label.text())})</h1>")
-                    f.write("<table><tr><th>상태</th><th>URL</th><th>텍스트</th><th>오류</th></tr>")
+        try:
+            import html
 
-                    for r in range(self.link_table.rowCount()):
-                        status_item = self.link_table.item(r, 0)
-                        url_item = self.link_table.item(r, 1)
-                        text_item = self.link_table.item(r, 2)
-                        error_item = self.link_table.item(r, 3)
+            if file_path.lower().endswith(".xlsx"):
+                checker = HyperlinkChecker()
+                ok = checker.export_links_to_excel(self._links, file_path)
+                if not ok:
+                    raise RuntimeError("엑셀 저장 실패")
+                get_toast_manager().success(f"엑셀 저장 완료: {file_path}")
+                return
 
-                        status = status_item.text() if status_item else ""
-                        url = url_item.text() if url_item else ""
-                        text = text_item.text() if text_item else ""
-                        error = error_item.text() if error_item else ""
-                        cls = "valid" if status == "✓" else "broken"
-                        f.write(
-                            f"<tr><td class='{cls}'>{html.escape(status)}</td>"
-                            f"<td>{html.escape(url)}</td>"
-                            f"<td>{html.escape(text)}</td>"
-                            f"<td>{html.escape(error)}</td></tr>"
-                        )
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write("<html><head><meta charset='utf-8'><style>")
+                f.write("table { border-collapse: collapse; width: 100%; }")
+                f.write("th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }")
+                f.write(".valid { color: green; } .broken { color: red; }")
+                f.write("</style></head><body>")
+                f.write(f"<h1>링크 검사 결과 ({html.escape(self.total_label.text())})</h1>")
+                f.write("<table><tr><th>상태</th><th>URL</th><th>텍스트</th><th>오류</th></tr>")
 
-                    f.write("</table></body></html>")
+                for r in range(self.link_table.rowCount()):
+                    status_item = self.link_table.item(r, 0)
+                    url_item = self.link_table.item(r, 1)
+                    text_item = self.link_table.item(r, 2)
+                    error_item = self.link_table.item(r, 3)
 
-                get_toast_manager().success(f"리포트 저장 완료: {file_path}")
-            except Exception as e:
-                get_toast_manager().error(f"저장 실패: {e}")
+                    status = status_item.text() if status_item else ""
+                    url = url_item.text() if url_item else ""
+                    text = text_item.text() if text_item else ""
+                    error = error_item.text() if error_item else ""
+                    cls = "valid" if status == "✅" else "broken"
+                    f.write(
+                        f"<tr><td class='{cls}'>{html.escape(status)}</td>"
+                        f"<td>{html.escape(url)}</td>"
+                        f"<td>{html.escape(text)}</td>"
+                        f"<td>{html.escape(error)}</td></tr>"
+                    )
 
+                f.write("</table></body></html>")
+
+            get_toast_manager().success(f"리포트 저장 완료: {file_path}")
+        except Exception as e:
+            get_toast_manager().error(f"저장 실패: {e}")
