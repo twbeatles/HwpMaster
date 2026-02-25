@@ -220,6 +220,13 @@ class StyleCop:
             StyleApplyResult
         """
         try:
+            if not rule.apply_to_body and not rule.apply_to_heading:
+                return StyleApplyResult(
+                    success=False,
+                    file_path=file_path,
+                    error_message="apply_to_body 또는 apply_to_heading 중 하나는 True여야 합니다.",
+                )
+
             from .hwp_handler import HwpHandler
             
             with HwpHandler() as handler:
@@ -227,34 +234,66 @@ class StyleCop:
                 hwp = handler._hwp
                 
                 hwp.open(file_path)
-                
-                # 전체 선택 (pyhwpx 액션 사용)
-                hwp.Run("SelectAll")
-                
-                # 문자 서식 설정
-                hwp.HAction.GetDefault("CharShape", hwp.HParameterSet.HCharShape.HSet)
-                
-                char_shape = hwp.HParameterSet.HCharShape
-                char_shape.FaceNameHangul = rule.font_name
-                char_shape.FaceNameLatin = rule.font_name
-                char_shape.Height = hwp.PointToHwpUnit(rule.font_size)
-                
-                hwp.HAction.Execute("CharShape", hwp.HParameterSet.HCharShape.HSet)
-                
-                # 문단 서식 설정
-                hwp.HAction.GetDefault("ParaShape", hwp.HParameterSet.HParaShape.HSet)
-                
-                para_shape = hwp.HParameterSet.HParaShape
-                para_shape.LineSpacingType = 0  # 퍼센트
-                para_shape.LineSpacing = int(rule.line_spacing)
-                
-                if rule.first_line_indent > 0:
-                    para_shape.FirstLineIndent = hwp.PointToHwpUnit(rule.first_line_indent)
-                
-                hwp.HAction.Execute("ParaShape", hwp.HParameterSet.HParaShape.HSet)
-                
-                # 선택 해제 (pyhwpx 액션 사용)
-                hwp.Run("Cancel")
+
+                if rule.apply_to_body:
+                    # 전체 선택 (pyhwpx 액션 사용)
+                    hwp.Run("SelectAll")
+
+                    # 문자 서식 설정
+                    hwp.HAction.GetDefault("CharShape", hwp.HParameterSet.HCharShape.HSet)
+
+                    char_shape = hwp.HParameterSet.HCharShape
+                    char_shape.FaceNameHangul = rule.font_name
+                    char_shape.FaceNameLatin = rule.font_name
+                    char_shape.Height = hwp.PointToHwpUnit(rule.font_size)
+
+                    hwp.HAction.Execute("CharShape", hwp.HParameterSet.HCharShape.HSet)
+
+                    # 문단 서식 설정
+                    hwp.HAction.GetDefault("ParaShape", hwp.HParameterSet.HParaShape.HSet)
+
+                    para_shape = hwp.HParameterSet.HParaShape
+                    para_shape.LineSpacingType = 0  # 퍼센트
+                    para_shape.LineSpacing = int(rule.line_spacing)
+
+                    if rule.first_line_indent > 0:
+                        para_shape.FirstLineIndent = hwp.PointToHwpUnit(rule.first_line_indent)
+
+                    # pyhwpx/한글 버전에 따라 속성명이 다를 수 있어 존재할 때만 반영
+                    before = hwp.PointToHwpUnit(rule.paragraph_spacing_before)
+                    after = hwp.PointToHwpUnit(rule.paragraph_spacing_after)
+                    for attr_name in ("ParaSpacingBefore", "SpacingBefore", "SpaceBefore"):
+                        if hasattr(para_shape, attr_name):
+                            setattr(para_shape, attr_name, before)
+                    for attr_name in ("ParaSpacingAfter", "SpacingAfter", "SpaceAfter"):
+                        if hasattr(para_shape, attr_name):
+                            setattr(para_shape, attr_name, after)
+
+                    hwp.HAction.Execute("ParaShape", hwp.HParameterSet.HParaShape.HSet)
+
+                    # 선택 해제 (pyhwpx 액션 사용)
+                    hwp.Run("Cancel")
+
+                if rule.apply_to_heading and (rule.heading_font_name or rule.heading_font_size):
+                    # 제목 패턴 기반 보정 (가능한 환경에서만 동작, 실패 시 본문 적용 결과는 유지)
+                    try:
+                        hwp.Run("MoveDocBegin")
+                        heading_pattern = r"^(?:[1-9]\.|제\s*\d+\s*[장절조]|[가-힣]\.|[①-⑩])"
+
+                        while hwp.find_forward(heading_pattern, regex=True):
+                            hwp.Run("MoveLineBegin")
+                            hwp.Run("MoveSelLineEnd")
+                            hwp.HAction.GetDefault("CharShape", hwp.HParameterSet.HCharShape.HSet)
+                            char_shape = hwp.HParameterSet.HCharShape
+                            if rule.heading_font_name:
+                                char_shape.FaceNameHangul = rule.heading_font_name
+                                char_shape.FaceNameLatin = rule.heading_font_name
+                            if rule.heading_font_size:
+                                char_shape.Height = hwp.PointToHwpUnit(rule.heading_font_size)
+                            hwp.HAction.Execute("CharShape", hwp.HParameterSet.HCharShape.HSet)
+                            hwp.Run("Cancel")
+                    except Exception as heading_e:
+                        self._logger.warning(f"제목 서식 보정 실패(무시): {heading_e}")
                 
                 # 저장 (pyhwpx 메서드 사용)
                 save_path = output_path if output_path else file_path

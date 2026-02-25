@@ -114,6 +114,23 @@ class TableDoctor:
     def __init__(self) -> None:
         self._logger = logging.getLogger(__name__)
         self._custom_styles: list[TableStyle] = []
+
+    @staticmethod
+    def _hex_to_rgb(color: str) -> tuple[int, int, int]:
+        text = str(color or "").strip().lstrip("#")
+        if len(text) == 3:
+            text = "".join(ch * 2 for ch in text)
+        if len(text) != 6:
+            return (0, 0, 0)
+        try:
+            return (int(text[0:2], 16), int(text[2:4], 16), int(text[4:6], 16))
+        except Exception:
+            return (0, 0, 0)
+
+    @staticmethod
+    def _set_attr_if_exists(target: Any, name: str, value: Any) -> None:
+        if hasattr(target, name):
+            setattr(target, name, value)
     
     def get_presets(self) -> list[TableStyle]:
         """프리셋 목록"""
@@ -234,7 +251,65 @@ class TableDoctor:
                             cell_border.BorderWidthRight = border_width
                             cell_border.BorderWidthTop = border_width
                             cell_border.BorderWidthBottom = border_width
-                            
+
+                            # 테두리 색상 설정
+                            r, g, b = self._hex_to_rgb(style.border_color)
+                            try:
+                                border_color = hwp.RGBColor(r, g, b)
+                                for attr_name in (
+                                    "BorderColorLeft",
+                                    "BorderColorRight",
+                                    "BorderColorTop",
+                                    "BorderColorBottom",
+                                ):
+                                    self._set_attr_if_exists(cell_border, attr_name, border_color)
+                            except Exception as color_e:
+                                self._logger.debug(f"테두리 색상 적용 실패(무시): {color_e}")
+
+                            # 테두리 라인 타입 반영 (지원 속성에 한함)
+                            style_map = {
+                                "none": 0,
+                                "thin": 1,
+                                "medium": 2,
+                                "thick": 3,
+                                "double": 4,
+                            }
+                            line_style = style_map.get(str(style.border_style).lower(), 1)
+                            for attr_name in (
+                                "BorderTypeLeft",
+                                "BorderTypeRight",
+                                "BorderTypeTop",
+                                "BorderTypeBottom",
+                                "BorderLineTypeLeft",
+                                "BorderLineTypeRight",
+                                "BorderLineTypeTop",
+                                "BorderLineTypeBottom",
+                            ):
+                                self._set_attr_if_exists(cell_border, attr_name, line_style)
+
+                            # 셀 패딩(내부 여백) 반영
+                            self._set_attr_if_exists(cell_border, "MarginLeft", hwp.MiliToHwpUnit(style.cell_padding_left))
+                            self._set_attr_if_exists(cell_border, "MarginRight", hwp.MiliToHwpUnit(style.cell_padding_right))
+                            self._set_attr_if_exists(cell_border, "MarginTop", hwp.MiliToHwpUnit(style.cell_padding_top))
+                            self._set_attr_if_exists(cell_border, "MarginBottom", hwp.MiliToHwpUnit(style.cell_padding_bottom))
+
+                            if style.header_bg_color:
+                                hr, hg, hb = self._hex_to_rgb(style.header_bg_color)
+                                try:
+                                    header_color = hwp.RGBColor(hr, hg, hb)
+                                    for attr_name in ("FillFaceColor", "FaceColor", "ShadeColor"):
+                                        self._set_attr_if_exists(cell_border, attr_name, header_color)
+                                except Exception as fill_e:
+                                    self._logger.debug(f"헤더 배경색 적용 실패(무시): {fill_e}")
+                            elif style.alternate_row_color:
+                                ar, ag, ab = self._hex_to_rgb(style.alternate_row_color)
+                                try:
+                                    alt_color = hwp.RGBColor(ar, ag, ab)
+                                    for attr_name in ("FillFaceColor", "FaceColor", "ShadeColor"):
+                                        self._set_attr_if_exists(cell_border, attr_name, alt_color)
+                                except Exception as fill_e:
+                                    self._logger.debug(f"줄무늬 색상 적용 실패(무시): {fill_e}")
+                             
                             hwp.HAction.Execute("CellBorder", cell_border.HSet)
                             fixed_count += 1
                         except Exception as style_e:

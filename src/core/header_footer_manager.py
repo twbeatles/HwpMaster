@@ -198,7 +198,7 @@ class HeaderFooterManager:
             PageNumberFormat.KOREAN: "{{page}}쪽",
         }
         return formats.get(format_type, "{{page}}")
-    
+
     def _replace_variables(self, text: str, source_path: str) -> str:
         """변수를 실제 값으로 치환"""
         result = text
@@ -220,6 +220,18 @@ class HeaderFooterManager:
             result = result.replace("{{company}}", "")
         
         return result
+
+    def _apply_text_style(self, config: HeaderFooterConfig) -> None:
+        """헤더/푸터 텍스트 스타일 적용."""
+        try:
+            self._hwp.HAction.GetDefault("CharShape", self._hwp.HParameterSet.HCharShape.HSet)
+            char_shape = self._hwp.HParameterSet.HCharShape
+            char_shape.FaceNameHangul = config.font_name
+            char_shape.FaceNameLatin = config.font_name
+            char_shape.Height = self._hwp.PointToHwpUnit(float(config.font_size))
+            self._hwp.HAction.Execute("CharShape", self._hwp.HParameterSet.HCharShape.HSet)
+        except Exception as e:
+            self._logger.debug(f"헤더/푸터 글꼴 적용 실패(무시): {e}")
     
     def apply_header_footer(
         self,
@@ -317,12 +329,18 @@ class HeaderFooterManager:
                 header_text += "\t" + self._replace_variables(config.header_center, source_path)
             if config.header_right:
                 header_text += "\t" + self._replace_variables(config.header_right, source_path)
+
+            if config.include_filename and "{{filename}}" not in header_text:
+                header_text += "\t" + Path(source_path).name
+            if config.include_date and "{{date}}" not in header_text:
+                header_text += "\t" + datetime.now().strftime("%Y-%m-%d")
             
             if header_text:
                 # pyhwpx 호환 방식으로 텍스트 삽입
                 self._hwp.HAction.GetDefault("InsertText", self._hwp.HParameterSet.HInsertText.HSet)
                 self._hwp.HParameterSet.HInsertText.Text = header_text.strip()
                 self._hwp.HAction.Execute("InsertText", self._hwp.HParameterSet.HInsertText.HSet)
+                self._apply_text_style(config)
             
             self._hwp.HAction.Run("CloseHeaderFooter")
             
@@ -348,12 +366,18 @@ class HeaderFooterManager:
                 footer_text += "\t" + self._replace_variables(config.footer_center, source_path)
             if config.footer_right:
                 footer_text += "\t" + self._replace_variables(config.footer_right, source_path)
+
+            if config.include_filename and "{{filename}}" not in footer_text:
+                footer_text += "\t" + Path(source_path).name
+            if config.include_date and "{{date}}" not in footer_text:
+                footer_text += "\t" + datetime.now().strftime("%Y-%m-%d")
             
             if footer_text:
                 # pyhwpx 호환 방식으로 텍스트 삽입
                 self._hwp.HAction.GetDefault("InsertText", self._hwp.HParameterSet.HInsertText.HSet)
                 self._hwp.HParameterSet.HInsertText.Text = footer_text.strip()
                 self._hwp.HAction.Execute("InsertText", self._hwp.HParameterSet.HInsertText.HSet)
+                self._apply_text_style(config)
             
             self._hwp.HAction.Run("CloseHeaderFooter")
             

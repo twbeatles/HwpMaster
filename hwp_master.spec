@@ -21,6 +21,7 @@ ROOT = Path(SPECPATH)
 datas = [
     (str(ROOT / 'assets'), 'assets'),
     (str(ROOT / 'README.md'), '.'),
+    (str(ROOT / 'PROJECT_AUDIT_PYHWPX.md'), '.'),
 ]
 
 # 숨겨진 임포트
@@ -32,6 +33,23 @@ hiddenimports = [
     'pyhwpx',
     'win32com.client',
     'pythoncom',
+    # Lazy-loaded pages (importlib in main_window)
+    'src.ui.pages.template_page',
+    'src.ui.pages.macro_page',
+    'src.ui.pages.regex_page',
+    'src.ui.pages.style_cop_page',
+    'src.ui.pages.table_doctor_page',
+    'src.ui.pages.doc_diff_page',
+    'src.ui.pages.smart_toc_page',
+    'src.ui.pages.watermark_page',
+    'src.ui.pages.header_footer_page',
+    'src.ui.pages.bookmark_page',
+    'src.ui.pages.hyperlink_page',
+    'src.ui.pages.image_extractor_page',
+    'src.ui.pages.action_console_page',
+    # Core extensions used by dynamic action console/capability mapping
+    'src.core.action_runner',
+    'src.core.capability_mapper',
 ]
 
 # 제외할 모듈  

@@ -291,6 +291,7 @@ class DataInjectWorker(BaseWorker):
         data_file: str,
         output_dir: str,
         filename_field: Optional[str] = None,
+        filename_template: Optional[str] = None,
         parent=None
     ) -> None:
         super().__init__(parent)
@@ -299,6 +300,7 @@ class DataInjectWorker(BaseWorker):
         self._data_file = data_file
         self._output_dir = output_dir
         self._filename_field = filename_field
+        self._filename_template = filename_template
 
     @staticmethod
     def _estimate_csv_rows(data_path: Path) -> int:
@@ -419,6 +421,7 @@ class DataInjectWorker(BaseWorker):
                     data_iterable=all_rows,
                     output_dir=out_dir,
                     filename_field=self._filename_field,
+                    filename_template=self._filename_template,
                     progress_callback=progress_cb,
                     total_count=total_rows if total_rows > 0 else None,
                 ):
@@ -471,7 +474,7 @@ class MetadataCleanWorker(BaseWorker):
         self,
         files: list[str],
         output_dir: Optional[str] = None,
-        options: Optional[dict[str, bool]] = None,
+        options: Optional[dict[str, Any]] = None,
         parent=None
     ) -> None:
         super().__init__(parent)
@@ -489,6 +492,10 @@ class MetadataCleanWorker(BaseWorker):
         
         success_count = 0
         fail_count = 0
+        pii_total = 0
+        warnings: list[str] = []
+        password_requested = bool(str((self._options or {}).get("document_password", "")).strip())
+        password_not_applied = 0
         
         try:
             with com_context(), HwpHandler() as handler:
@@ -521,12 +528,20 @@ class MetadataCleanWorker(BaseWorker):
                     if out_dir:
                         output_path = resolve_output_path(out_dir, file_path, suffix="_metadata_cleaned")
 
-                    result = handler.clean_metadata(file_path, output_path=output_path, options=self._options)
-                    
+                    result = handler.harden_document(file_path, output_path=output_path, options=self._options)
+                    artifacts = dict(result.artifacts or {})
+
                     if result.success:
                         success_count += 1
                     else:
                         fail_count += 1
+
+                    pii_total += int(artifacts.get("pii_total", 0) or 0)
+                    if password_requested and not bool(artifacts.get("password_applied", False)):
+                        password_not_applied += 1
+
+                    for msg in result.warnings:
+                        warnings.append(f"{filename}: {msg}")
             
             self.state = WorkerState.FINISHED
             self._emit_finished_once(WorkerResult(
@@ -534,7 +549,10 @@ class MetadataCleanWorker(BaseWorker):
                 data={
                     "cancelled": False,
                     "success_count": success_count,
-                    "fail_count": fail_count
+                    "fail_count": fail_count,
+                    "pii_total": pii_total,
+                    "password_not_applied": password_not_applied,
+                    "warnings": warnings,
                 }
             ))
             
@@ -548,6 +566,9 @@ class MetadataCleanWorker(BaseWorker):
                     "cancelled": False,
                     "success_count": success_count,
                     "fail_count": fail_count,
+                    "pii_total": pii_total,
+                    "password_not_applied": password_not_applied,
+                    "warnings": warnings,
                 },
             ))
 
@@ -1473,6 +1494,96 @@ class SmartTocWorker(BaseWorker):
                 success=False,
                 error_message=str(e),
                 data={"cancelled": False, "success_count": 0, "fail_count": 1},
+            ))
+
+
+class ActionConsoleWorker(BaseWorker):
+    """고급 액션 콘솔 실행 Worker."""
+
+    def __init__(
+        self,
+        source_file: str,
+        commands: list[dict[str, Any]],
+        *,
+        stop_on_error: bool = True,
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self._source_file = str(source_file or "")
+        self._commands = commands
+        self._stop_on_error = bool(stop_on_error)
+
+    def run(self) -> None:
+        from ..core.action_runner import ActionRunner, ActionCommand
+        from ..core.hwp_handler import HwpHandler
+
+        self.state = WorkerState.RUNNING
+        self.status_changed.emit("액션 실행 준비 중...")
+
+        try:
+            with com_context(), HwpHandler() as handler:
+                if self._source_file:
+                    handler._get_hwp().open(self._source_file)
+
+                normalized: list[ActionCommand] = []
+                total = len(self._commands)
+                for idx, raw in enumerate(self._commands, start=1):
+                    if self.is_cancelled():
+                        self.state = WorkerState.CANCELLED
+                        self._emit_finished_once(WorkerResult(
+                            success=False,
+                            error_message="사용자가 작업을 취소했습니다.",
+                            data=make_summary_data(
+                                cancelled=True,
+                                success_count=0,
+                                fail_count=0,
+                                changed_count=idx - 1,
+                            ),
+                        ))
+                        return
+
+                    cmd = ActionCommand(
+                        action_type=str(raw.get("action_type", "run")),
+                        action_id=str(raw.get("action_id", "")),
+                        pset_name=str(raw.get("pset_name", "")),
+                        values=dict(raw.get("values", {}) or {}),
+                        description=str(raw.get("description", "")),
+                    ).normalize()
+                    normalized.append(cmd)
+                    self.progress.emit(idx, max(total, 1), cmd.description or cmd.action_id)
+                    self.status_changed.emit(f"준비 중: {cmd.action_type} {cmd.action_id}")
+
+                runner = ActionRunner()
+                op = runner.run_commands(
+                    normalized,
+                    stop_on_error=self._stop_on_error,
+                    handler=handler,
+                )
+
+            self.state = WorkerState.FINISHED if op.success else WorkerState.ERROR
+            if not op.success and op.error:
+                self.error_occurred.emit(op.error)
+            failed = int(len((op.artifacts or {}).get("failed_commands", [])))
+            success_count = max(0, len(normalized) - failed)
+            self._emit_finished_once(WorkerResult(
+                success=op.success,
+                error_message=op.error,
+                data=make_summary_data(
+                    cancelled=False,
+                    success_count=success_count,
+                    fail_count=failed,
+                    warnings=op.warnings,
+                    changed_count=op.changed_count,
+                    artifacts=op.artifacts,
+                ),
+            ))
+        except Exception as e:
+            self.state = WorkerState.ERROR
+            self.error_occurred.emit(str(e))
+            self._emit_finished_once(WorkerResult(
+                success=False,
+                error_message=str(e),
+                data=make_summary_data(cancelled=False, success_count=0, fail_count=1),
             ))
 
 

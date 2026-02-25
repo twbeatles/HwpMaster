@@ -1,5 +1,5 @@
 # Core Module - HWP and Excel Handlers
-from .hwp_handler import HwpHandler
+from .hwp_handler import HwpHandler, OperationResult, CapabilitySnapshot
 from .excel_handler import ExcelHandler
 from .template_store import TemplateStore
 from .macro_recorder import MacroRecorder
@@ -8,6 +8,8 @@ from .style_cop import StyleCop
 from .table_doctor import TableDoctor
 from .doc_diff import DocDiff
 from .smart_toc import SmartTOC
+from .action_runner import ActionRunner, ActionPreset
+from .capability_mapper import CapabilityMapper
 
 # Phase 5 - Productivity
 from .watermark_manager import WatermarkManager
@@ -18,6 +20,8 @@ from .image_extractor import ImageExtractor
 
 __all__ = [
     'HwpHandler', 
+    'OperationResult',
+    'CapabilitySnapshot',
     'ExcelHandler',
     'TemplateStore',
     'MacroRecorder',
@@ -26,6 +30,9 @@ __all__ = [
     'TableDoctor',
     'DocDiff',
     'SmartTOC',
+    'ActionRunner',
+    'ActionPreset',
+    'CapabilityMapper',
     # Phase 5
     'WatermarkManager',
     'HeaderFooterManager',

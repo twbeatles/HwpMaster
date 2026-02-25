@@ -7,7 +7,6 @@ Author: HWP Master
 
 import json
 import logging
-import re
 from pathlib import Path
 from typing import Optional, Any, Callable
 from dataclasses import dataclass, asdict, field
@@ -52,34 +51,105 @@ class MacroAction:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "MacroAction":
         return cls(**data)
-    
+
+    @staticmethod
+    def _safe_str(value: Any, default: str = "") -> str:
+        if value is None:
+            return default
+        return str(value)
+
+    @staticmethod
+    def _hex_to_rgb(color: str) -> tuple[int, int, int]:
+        s = str(color or "").strip().lstrip("#")
+        if len(s) == 3:
+            s = "".join(ch * 2 for ch in s)
+        if len(s) != 6:
+            return (0, 0, 0)
+        try:
+            return (int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16))
+        except Exception:
+            return (0, 0, 0)
+
     def to_python_code(self) -> str:
         """Python 코드로 변환"""
         action = self.action_type
         params = self.params
-        
-        code_map = {
-            "open_file": f'hwp.open("{params.get("path", "")}")',
-            "save_file": f'hwp.save_as("{params.get("path", "")}")',
-            "find_replace": f'hwp.find_replace("{params.get("find", "")}", "{params.get("replace", "")}")',
-            "format_text": f'hwp.format_text({params})',
-            "insert_text": f'hwp.insert_text("{params.get("text", "")}")',
-            "delete_text": 'hwp.delete_selection()',
-            "select_all": 'hwp.select_all()',
-            "copy": 'hwp.copy()',
-            "paste": 'hwp.paste()',
-            "undo": 'hwp.undo()',
-            "redo": 'hwp.redo()',
-            "set_font": f'hwp.set_font("{params.get("font", "맑은 고딕")}")',
-            "set_color": f'hwp.set_text_color("{params.get("color", "#000000")}")',
-            "set_size": f'hwp.set_font_size({params.get("size", 10)})',
-            "set_bold": f'hwp.set_bold({params.get("enabled", True)})',
-            "set_italic": f'hwp.set_italic({params.get("enabled", True)})',
-            "set_underline": f'hwp.set_underline({params.get("enabled", True)})',
-            "custom": params.get("code", "# Custom action"),
-        }
-        
-        return code_map.get(action, f"# Unknown action: {action}")
+        if action == "open_file":
+            return f"hwp.open({self._safe_str(params.get('path'), '').__repr__()})"
+        if action == "save_file":
+            return f"hwp.save_as({self._safe_str(params.get('path'), '').__repr__()})"
+        if action == "find_replace":
+            find_text = self._safe_str(params.get("find"), "")
+            replace_text = self._safe_str(params.get("replace"), "")
+            return f"hwp.find_replace({find_text.__repr__()}, {replace_text.__repr__()})"
+        if action == "insert_text":
+            text = self._safe_str(params.get("text"), "")
+            return f"hwp.insert_text({text.__repr__()})"
+        if action == "delete_text":
+            return 'hwp.Run("Delete")'
+        if action == "select_all":
+            return 'hwp.Run("SelectAll")'
+        if action == "copy":
+            return 'hwp.Run("Copy")'
+        if action == "paste":
+            return "hwp.paste()"
+        if action == "undo":
+            return 'hwp.Run("Undo")'
+        if action == "redo":
+            return 'hwp.Run("Redo")'
+        if action == "set_font":
+            font = self._safe_str(params.get("font"), "맑은 고딕")
+            return f"hwp.set_font({font.__repr__()})"
+        if action == "set_color":
+            r, g, b = self._hex_to_rgb(self._safe_str(params.get("color"), "#000000"))
+            return (
+                'hwp.HAction.GetDefault("CharShape", hwp.HParameterSet.HCharShape.HSet); '
+                "hwp.HParameterSet.HCharShape.TextColor = hwp.RGBColor("
+                f"{r}, {g}, {b}); "
+                'hwp.HAction.Execute("CharShape", hwp.HParameterSet.HCharShape.HSet)'
+            )
+        if action == "set_size":
+            size = float(params.get("size", 10))
+            return (
+                'hwp.HAction.GetDefault("CharShape", hwp.HParameterSet.HCharShape.HSet); '
+                f"hwp.HParameterSet.HCharShape.Height = hwp.PointToHwpUnit({size}); "
+                'hwp.HAction.Execute("CharShape", hwp.HParameterSet.HCharShape.HSet)'
+            )
+        if action == "set_bold":
+            return 'hwp.Run("CharShapeBold")'
+        if action == "set_italic":
+            return 'hwp.Run("CharShapeItalic")'
+        if action == "set_underline":
+            return 'hwp.Run("CharShapeUnderline")'
+        if action == "format_text":
+            chunks: list[str] = []
+            if "font" in params:
+                chunks.append(f"hwp.set_font({self._safe_str(params.get('font'), '맑은 고딕').__repr__()})")
+            if "size" in params:
+                size = float(params.get("size", 10))
+                chunks.append(
+                    'hwp.HAction.GetDefault("CharShape", hwp.HParameterSet.HCharShape.HSet); '
+                    f"hwp.HParameterSet.HCharShape.Height = hwp.PointToHwpUnit({size}); "
+                    'hwp.HAction.Execute("CharShape", hwp.HParameterSet.HCharShape.HSet)'
+                )
+            if "color" in params:
+                r, g, b = self._hex_to_rgb(self._safe_str(params.get("color"), "#000000"))
+                chunks.append(
+                    'hwp.HAction.GetDefault("CharShape", hwp.HParameterSet.HCharShape.HSet); '
+                    "hwp.HParameterSet.HCharShape.TextColor = hwp.RGBColor("
+                    f"{r}, {g}, {b}); "
+                    'hwp.HAction.Execute("CharShape", hwp.HParameterSet.HCharShape.HSet)'
+                )
+            if params.get("bold"):
+                chunks.append('hwp.Run("CharShapeBold")')
+            if params.get("italic"):
+                chunks.append('hwp.Run("CharShapeItalic")')
+            if params.get("underline"):
+                chunks.append('hwp.Run("CharShapeUnderline")')
+            return " ; ".join(chunks) if chunks else "# format_text: no-op"
+        if action == "custom":
+            return self._safe_str(params.get("code"), "# Custom action")
+        return f"# Unknown action: {action}"
 
 
 @dataclass
@@ -338,11 +408,37 @@ class MacroRecorder:
             elif action_type == "set_underline":
                 hwp.Run("CharShapeUnderline")
             elif action_type == "set_color":
-                # 글자색 설정은 복잡하므로 경고만 출력
-                self._logger.warning(f"글자색 변경은 현재 지원되지 않습니다: {params.get('color')}")
+                color = MacroAction._safe_str(params.get("color"), "#000000")
+                r, g, b = MacroAction._hex_to_rgb(color)
+                hwp.HAction.GetDefault("CharShape", hwp.HParameterSet.HCharShape.HSet)
+                hwp.HParameterSet.HCharShape.TextColor = hwp.RGBColor(r, g, b)
+                hwp.HAction.Execute("CharShape", hwp.HParameterSet.HCharShape.HSet)
             elif action_type == "set_size":
-                # 글자 크기 설정은 복잡하므로 경고만 출력
-                self._logger.warning(f"글자 크기 변경은 현재 지원되지 않습니다: {params.get('size')}")
+                size = float(params.get("size", 10))
+                hwp.HAction.GetDefault("CharShape", hwp.HParameterSet.HCharShape.HSet)
+                hwp.HParameterSet.HCharShape.Height = hwp.PointToHwpUnit(size)
+                hwp.HAction.Execute("CharShape", hwp.HParameterSet.HCharShape.HSet)
+            elif action_type == "format_text":
+                font = params.get("font")
+                if font:
+                    hwp.set_font(str(font))
+                if "size" in params:
+                    size = float(params.get("size", 10))
+                    hwp.HAction.GetDefault("CharShape", hwp.HParameterSet.HCharShape.HSet)
+                    hwp.HParameterSet.HCharShape.Height = hwp.PointToHwpUnit(size)
+                    hwp.HAction.Execute("CharShape", hwp.HParameterSet.HCharShape.HSet)
+                if "color" in params:
+                    color = MacroAction._safe_str(params.get("color"), "#000000")
+                    r, g, b = MacroAction._hex_to_rgb(color)
+                    hwp.HAction.GetDefault("CharShape", hwp.HParameterSet.HCharShape.HSet)
+                    hwp.HParameterSet.HCharShape.TextColor = hwp.RGBColor(r, g, b)
+                    hwp.HAction.Execute("CharShape", hwp.HParameterSet.HCharShape.HSet)
+                if bool(params.get("bold")):
+                    hwp.Run("CharShapeBold")
+                if bool(params.get("italic")):
+                    hwp.Run("CharShapeItalic")
+                if bool(params.get("underline")):
+                    hwp.Run("CharShapeUnderline")
             elif action_type == "custom":
                 # 보안상 커스텀 코드 실행 비활성화
                 self._logger.warning(f"커스텀 액션은 보안상 실행되지 않습니다: {action.description}")
@@ -464,10 +560,10 @@ class MacroRecorder:
                 "name": "따옴표 통일",
                 "description": "다양한 따옴표를 표준 형식으로 통일",
                 "replacements": [
-                    (""", "\""),
-                    (""", "\""),
-                    ("'", "'"),
-                    ("'", "'"),
+                    ("“", "\""),
+                    ("”", "\""),
+                    ("‘", "'"),
+                    ("’", "'"),
                 ],
             },
             {

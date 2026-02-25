@@ -11,7 +11,7 @@ import re
 import logging
 from pathlib import Path
 from typing import Optional, Callable, Any, Iterable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 
@@ -31,6 +31,28 @@ class ConversionResult:
     source_path: str
     output_path: Optional[str] = None
     error_message: Optional[str] = None
+
+
+@dataclass
+class OperationResult:
+    """Generic operation result for action APIs."""
+    success: bool
+    warnings: list[str] = field(default_factory=list)
+    changed_count: int = 0
+    artifacts: dict[str, Any] = field(default_factory=dict)
+    error: Optional[str] = None
+
+
+@dataclass
+class CapabilitySnapshot:
+    """pyhwpx capability snapshot."""
+    pyhwpx_version: str
+    method_count: int
+    methods: list[str]
+    action_count: int
+    actions: list[str]
+    categories: dict[str, int] = field(default_factory=dict)
+    unsupported_categories: list[str] = field(default_factory=list)
 
 
 class HwpHandler:
@@ -82,6 +104,811 @@ class HwpHandler:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
         return False
+
+    @staticmethod
+    def introspect_capabilities() -> CapabilitySnapshot:
+        """Inspect pyhwpx capabilities without opening a document."""
+        categories: dict[str, int] = {
+            "file_io": 0,
+            "field_form": 0,
+            "find_replace": 0,
+            "style_format": 0,
+            "table": 0,
+            "shape_graphic": 0,
+            "security_privacy": 0,
+            "automation_macro": 0,
+            "navigation_selection": 0,
+            "other": 0,
+        }
+        unsupported: list[str] = []
+
+        try:
+            import pyhwpx  # type: ignore
+
+            names = sorted(n for n in dir(pyhwpx.Hwp) if not n.startswith("_"))
+
+            for name in names:
+                lowered = name.lower()
+                if lowered.startswith(("file", "open", "save", "close", "quit")):
+                    categories["file_io"] += 1
+                elif "field" in lowered or "metatag" in lowered or lowered.startswith("form"):
+                    categories["field_form"] += 1
+                elif "find" in lowered or "replace" in lowered:
+                    categories["find_replace"] += 1
+                elif "charshape" in lowered or "parashape" in lowered or "style" in lowered:
+                    categories["style_format"] += 1
+                elif "table" in lowered or "cell" in lowered:
+                    categories["table"] += 1
+                elif "shape" in lowered or "draw" in lowered or "picture" in lowered or "image" in lowered:
+                    categories["shape_graphic"] += 1
+                elif (
+                    "private" in lowered
+                    or "encrypt" in lowered
+                    or "distribution" in lowered
+                    or "trackchange" in lowered
+                ):
+                    categories["security_privacy"] += 1
+                elif "macro" in lowered or "script" in lowered:
+                    categories["automation_macro"] += 1
+                elif lowered.startswith(("move", "goto", "select")):
+                    categories["navigation_selection"] += 1
+                else:
+                    categories["other"] += 1
+
+            for key in ("security_privacy", "automation_macro", "field_form", "table", "shape_graphic"):
+                if categories.get(key, 0) == 0:
+                    unsupported.append(key)
+
+            return CapabilitySnapshot(
+                pyhwpx_version=str(getattr(pyhwpx, "__version__", "unknown")),
+                method_count=len(names),
+                methods=names,
+                action_count=sum(1 for n in names if n[:1].isupper()),
+                actions=[n for n in names if n[:1].isupper()],
+                categories=categories,
+                unsupported_categories=unsupported,
+            )
+        except Exception:
+            unsupported = [k for k in categories.keys() if k != "other"]
+            return CapabilitySnapshot(
+                pyhwpx_version="unknown",
+                method_count=0,
+                methods=[],
+                action_count=0,
+                actions=[],
+                categories=categories,
+                unsupported_categories=unsupported,
+            )
+
+    def run_action(self, action_id: str) -> bool:
+        """
+        Execute HWP Run action directly.
+
+        Returns:
+            True if action returns a truthy result.
+        """
+        hwp = self._get_hwp()
+        action = str(action_id or "").strip()
+        if not action:
+            raise ValueError("action_id가 비어 있습니다.")
+        result = hwp.Run(action)
+        return bool(result)
+
+    def execute_action(self, action_id: str, pset_name: str, values: dict[str, Any]) -> bool:
+        """
+        Execute HAction with parameter set values.
+
+        Example:
+            execute_action("InsertText", "HInsertText", {"Text": "hello"})
+        """
+        hwp = self._get_hwp()
+        action = str(action_id or "").strip()
+        set_name = str(pset_name or "").strip()
+        if not action:
+            raise ValueError("action_id가 비어 있습니다.")
+        if not set_name:
+            raise ValueError("pset_name이 비어 있습니다.")
+
+        hps = getattr(hwp, "HParameterSet", None)
+        if hps is None:
+            raise RuntimeError("HParameterSet을 사용할 수 없습니다.")
+
+        pset = getattr(hps, set_name, None)
+        if pset is None:
+            raise ValueError(f"지원하지 않는 파라미터셋: {set_name}")
+
+        hwp.HAction.GetDefault(action, pset.HSet)
+        for key, value in (values or {}).items():
+            if hasattr(pset, key):
+                setattr(pset, key, value)
+        result = hwp.HAction.Execute(action, pset.HSet)
+        return bool(result)
+
+    @staticmethod
+    def _extract_text_for_scan(hwp: Any) -> str:
+        """Extract plain text from current document for PII scanning."""
+        candidates = (
+            ("GetTextFile", ("TEXT", ""), {}),
+            ("get_text_file", ("TEXT", ""), {}),
+            ("GetText", tuple(), {}),
+            ("get_text", tuple(), {}),
+        )
+        for method_name, args, kwargs in candidates:
+            method = getattr(hwp, method_name, None)
+            if not callable(method):
+                continue
+            try:
+                value = method(*args, **kwargs)
+                return str(value or "")
+            except Exception:
+                continue
+        return ""
+
+    @staticmethod
+    def _detect_pii_patterns(
+        text: str,
+        patterns: Optional[dict[str, str]] = None,
+        sample_limit: int = 5,
+    ) -> tuple[dict[str, int], dict[str, list[str]], int]:
+        default_patterns = {
+            "resident_id": r"\b\d{6}-\d{7}\b",
+            "phone": r"\b(?:01[0-9]|0[2-9]\d?)-?\d{3,4}-?\d{4}\b",
+            "email": r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,}\b",
+            "card_number": r"\b\d{4}-?\d{4}-?\d{4}-?\d{4}\b",
+            "account_number": r"\b\d{2,6}-\d{2,6}-\d{2,6}\b",
+        }
+        merged_patterns = default_patterns.copy()
+        for key, value in (patterns or {}).items():
+            if key and value:
+                merged_patterns[str(key)] = str(value)
+
+        counts: dict[str, int] = {}
+        samples: dict[str, list[str]] = {}
+        total = 0
+
+        for key, pattern in merged_patterns.items():
+            try:
+                compiled = re.compile(pattern)
+            except re.error:
+                counts[key] = 0
+                samples[key] = []
+                continue
+
+            matches = list(compiled.finditer(text))
+            counts[key] = len(matches)
+            total += len(matches)
+
+            sample_values: list[str] = []
+            for match in matches:
+                token = str(match.group(0) or "").strip()
+                if not token:
+                    continue
+                if token in sample_values:
+                    continue
+                sample_values.append(token)
+                if len(sample_values) >= max(1, int(sample_limit)):
+                    break
+            samples[key] = sample_values
+
+        return counts, samples, total
+
+    @staticmethod
+    def _save_as_with_password(
+        hwp: Any,
+        output_path: str,
+        password: str = "",
+    ) -> tuple[bool, bool, Optional[str]]:
+        """
+        Save document, trying password variants when requested.
+
+        Returns:
+            (saved_ok, password_applied, warning_message)
+        """
+        password_value = str(password or "").strip()
+        if not password_value:
+            hwp.save_as(output_path)
+            return True, False, None
+
+        # 1) Try save_as keyword variants first.
+        for kw in ("password", "passwd", "security_password"):
+            try:
+                hwp.save_as(output_path, **{kw: password_value})
+                return True, True, None
+            except TypeError:
+                continue
+            except Exception:
+                continue
+
+        # 2) Try dedicated password/encryption methods.
+        for method_name in (
+            "set_password",
+            "set_document_password",
+            "set_file_password",
+            "set_encrypt_password",
+            "encrypt_document",
+        ):
+            method = getattr(hwp, method_name, None)
+            if not callable(method):
+                continue
+            try:
+                method(password_value)
+                hwp.save_as(output_path)
+                return True, True, None
+            except Exception:
+                continue
+
+        # 3) Fallback save without password (best effort).
+        hwp.save_as(output_path)
+        return True, False, "암호 설정 API를 찾지 못해 암호 없이 저장했습니다."
+
+    def scan_personal_info(
+        self,
+        source_path: str,
+        *,
+        patterns: Optional[dict[str, str]] = None,
+        sample_limit: int = 5,
+    ) -> OperationResult:
+        """
+        Scan a document for personal-information patterns.
+        """
+        try:
+            hwp = self._get_hwp()
+            hwp.open(source_path)
+            text = self._extract_text_for_scan(hwp)
+            if not text:
+                return OperationResult(
+                    success=True,
+                    warnings=["문서 텍스트를 추출하지 못해 스캔 결과가 비어 있습니다."],
+                    changed_count=0,
+                    artifacts={"matches": {}, "samples": {}, "total": 0},
+                )
+
+            counts, samples, total = self._detect_pii_patterns(
+                text=text,
+                patterns=patterns,
+                sample_limit=sample_limit,
+            )
+            return OperationResult(
+                success=True,
+                changed_count=total,
+                artifacts={
+                    "matches": counts,
+                    "samples": samples,
+                    "total": total,
+                },
+            )
+        except Exception as e:
+            return OperationResult(success=False, error=str(e))
+
+    def list_fields(self, source_path: str) -> OperationResult:
+        """
+        Return field names from a document.
+        """
+        warnings: list[str] = []
+        try:
+            hwp = self._get_hwp()
+            hwp.open(source_path)
+
+            raw: Any = None
+            for method_name in ("get_field_list", "GetFieldList", "field_list", "FieldList"):
+                method_or_value = getattr(hwp, method_name, None)
+                if method_or_value is None:
+                    continue
+                try:
+                    raw = method_or_value() if callable(method_or_value) else method_or_value
+                    break
+                except Exception as e:
+                    warnings.append(f"{method_name} 호출 실패: {e}")
+
+            fields: list[str] = []
+            if isinstance(raw, str):
+                tokens = re.split(r"[\n,;|\x02]+", raw)
+                fields = [token.strip() for token in tokens if token and token.strip()]
+            elif isinstance(raw, dict):
+                fields = [str(k).strip() for k in raw.keys() if str(k).strip()]
+            elif isinstance(raw, (list, tuple, set)):
+                fields = [str(item).strip() for item in raw if str(item).strip()]
+
+            # Deduplicate while preserving order.
+            deduped: list[str] = []
+            seen: set[str] = set()
+            for field_name in fields:
+                if field_name in seen:
+                    continue
+                seen.add(field_name)
+                deduped.append(field_name)
+
+            if not deduped:
+                warnings.append("필드 목록을 찾지 못했습니다.")
+
+            return OperationResult(
+                success=True,
+                warnings=warnings,
+                changed_count=len(deduped),
+                artifacts={"fields": deduped},
+            )
+        except Exception as e:
+            return OperationResult(success=False, warnings=warnings, error=str(e))
+
+    def fill_fields(
+        self,
+        source_path: str,
+        values: dict[str, Any],
+        output_path: Optional[str] = None,
+        *,
+        ignore_missing: bool = True,
+    ) -> OperationResult:
+        """
+        Fill field values in a document and save it.
+        """
+        warnings: list[str] = []
+        updated_fields: list[str] = []
+        missing_fields: list[str] = []
+
+        try:
+            hwp = self._get_hwp()
+            hwp.open(source_path)
+
+            for field_name, value in (values or {}).items():
+                applied = False
+                str_value = str(value)
+                for method_name in (
+                    "put_field_text",
+                    "PutFieldText",
+                    "set_field_text",
+                    "SetFieldText",
+                ):
+                    method = getattr(hwp, method_name, None)
+                    if not callable(method):
+                        continue
+                    try:
+                        method(str(field_name), str_value)
+                        applied = True
+                        updated_fields.append(str(field_name))
+                        break
+                    except Exception:
+                        continue
+
+                if not applied:
+                    missing_fields.append(str(field_name))
+
+            save_path = output_path if output_path else source_path
+            hwp.save_as(save_path)
+
+            if missing_fields:
+                warnings.append(f"일부 필드를 찾지 못했습니다: {', '.join(missing_fields)}")
+
+            success = True
+            if not ignore_missing and missing_fields:
+                success = False
+            if not updated_fields and values:
+                success = False
+
+            return OperationResult(
+                success=success,
+                warnings=warnings,
+                changed_count=len(updated_fields),
+                artifacts={
+                    "output_path": save_path,
+                    "updated_fields": updated_fields,
+                    "missing_fields": missing_fields,
+                },
+                error=None if success else "필드 반영에 실패한 항목이 있습니다.",
+            )
+        except Exception as e:
+            return OperationResult(
+                success=False,
+                warnings=warnings,
+                changed_count=len(updated_fields),
+                artifacts={
+                    "updated_fields": updated_fields,
+                    "missing_fields": missing_fields,
+                },
+                error=str(e),
+            )
+
+    def get_meta_tags(
+        self,
+        source_path: str,
+        keys: Optional[list[str]] = None,
+    ) -> OperationResult:
+        """
+        Read document meta tags (best effort across pyhwpx versions).
+        """
+        warnings: list[str] = []
+        tags: dict[str, str] = {}
+        try:
+            hwp = self._get_hwp()
+            hwp.open(source_path)
+
+            key_list = [str(k) for k in (keys or []) if str(k).strip()]
+            if key_list:
+                for key in key_list:
+                    value: Optional[str] = None
+                    for method_name in ("get_metatag", "GetMetaTag", "get_meta_tag"):
+                        method = getattr(hwp, method_name, None)
+                        if not callable(method):
+                            continue
+                        try:
+                            value = str(method(key))
+                            break
+                        except Exception:
+                            continue
+                    if value is not None and value != "None":
+                        tags[key] = value
+                    else:
+                        warnings.append(f"메타태그 조회 실패: {key}")
+            else:
+                raw: Any = None
+                for method_name in (
+                    "get_metatag_all",
+                    "GetMetaTagAll",
+                    "get_meta_tags",
+                    "get_metatags",
+                ):
+                    method = getattr(hwp, method_name, None)
+                    if not callable(method):
+                        continue
+                    try:
+                        raw = method()
+                        break
+                    except Exception:
+                        continue
+
+                if isinstance(raw, dict):
+                    tags = {str(k): str(v) for k, v in raw.items()}
+                elif isinstance(raw, (list, tuple)):
+                    for item in raw:
+                        if isinstance(item, (list, tuple)) and len(item) >= 2:
+                            tags[str(item[0])] = str(item[1])
+                elif raw is None:
+                    warnings.append("메타태그 조회 API를 찾지 못했습니다.")
+
+            return OperationResult(
+                success=True,
+                warnings=warnings,
+                changed_count=len(tags),
+                artifacts={"meta_tags": tags},
+            )
+        except Exception as e:
+            return OperationResult(success=False, warnings=warnings, error=str(e))
+
+    def set_meta_tags(
+        self,
+        source_path: str,
+        tags: dict[str, Any],
+        output_path: Optional[str] = None,
+    ) -> OperationResult:
+        """
+        Set document meta tags (best effort across pyhwpx versions).
+        """
+        warnings: list[str] = []
+        updated: list[str] = []
+        failed: list[str] = []
+
+        try:
+            hwp = self._get_hwp()
+            hwp.open(source_path)
+
+            for key, value in (tags or {}).items():
+                applied = False
+                for method_name in (
+                    "set_metatag",
+                    "SetMetaTag",
+                    "put_metatag",
+                    "put_meta_tag",
+                    "set_meta_tag",
+                ):
+                    method = getattr(hwp, method_name, None)
+                    if not callable(method):
+                        continue
+                    try:
+                        method(str(key), str(value))
+                        applied = True
+                        break
+                    except Exception:
+                        continue
+
+                if not applied and hasattr(hwp, "set_document_info"):
+                    try:
+                        hwp.set_document_info(str(key), str(value))
+                        applied = True
+                    except Exception:
+                        applied = False
+
+                if applied:
+                    updated.append(str(key))
+                else:
+                    failed.append(str(key))
+
+            save_path = output_path if output_path else source_path
+            hwp.save_as(save_path)
+
+            if failed:
+                warnings.append(f"일부 메타태그를 반영하지 못했습니다: {', '.join(failed)}")
+
+            success = len(failed) == 0 or len(updated) > 0
+            return OperationResult(
+                success=success,
+                warnings=warnings,
+                changed_count=len(updated),
+                artifacts={
+                    "output_path": save_path,
+                    "updated_keys": updated,
+                    "failed_keys": failed,
+                },
+                error=None if success else "메타태그 반영 실패",
+            )
+        except Exception as e:
+            return OperationResult(
+                success=False,
+                warnings=warnings,
+                changed_count=len(updated),
+                artifacts={"updated_keys": updated, "failed_keys": failed},
+                error=str(e),
+            )
+
+    @staticmethod
+    def _render_filename_template(
+        template: str,
+        row_data: dict[str, str],
+        index: int,
+        fallback_stem: str,
+    ) -> str:
+        class _SafeDict(dict[str, str]):
+            def __missing__(self, key: str) -> str:
+                return ""
+
+        data = {str(k): str(v) for k, v in (row_data or {}).items()}
+        data.setdefault("index", f"{index:04d}")
+        data.setdefault("_index", str(index))
+        rendered = str(template or "").strip()
+        if not rendered:
+            return f"{fallback_stem}_{index:04d}"
+        try:
+            rendered = rendered.format_map(_SafeDict(data))
+        except Exception:
+            rendered = f"{fallback_stem}_{index:04d}"
+        return rendered or f"{fallback_stem}_{index:04d}"
+
+    def mail_merge(
+        self,
+        template_path: str,
+        data_iterable: Iterable[dict[str, str]],
+        output_dir: str,
+        *,
+        filename_field: Optional[str] = None,
+        filename_template: Optional[str] = None,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        total_count: Optional[int] = None,
+        stop_on_error: bool = False,
+    ) -> OperationResult:
+        """
+        Mail-merge wrapper that returns a rich operation summary.
+        """
+        success_count = 0
+        fail_count = 0
+        warnings: list[str] = []
+        outputs: list[str] = []
+        failed_outputs: list[dict[str, str]] = []
+
+        try:
+            for idx, result in enumerate(
+                self.iter_inject_data(
+                    template_path=template_path,
+                    data_iterable=data_iterable,
+                    output_dir=output_dir,
+                    filename_field=filename_field,
+                    filename_template=filename_template,
+                    progress_callback=progress_callback,
+                    total_count=total_count,
+                ),
+                start=1,
+            ):
+                if result.success:
+                    success_count += 1
+                    if result.output_path:
+                        outputs.append(result.output_path)
+                else:
+                    fail_count += 1
+                    failed_outputs.append(
+                        {
+                            "index": str(idx),
+                            "error": str(result.error_message or "unknown"),
+                        }
+                    )
+                    warnings.append(f"{idx}번째 데이터 행 처리 실패")
+                    if stop_on_error:
+                        break
+
+            return OperationResult(
+                success=fail_count == 0,
+                warnings=warnings,
+                changed_count=success_count,
+                artifacts={
+                    "output_dir": str(Path(output_dir)),
+                    "outputs": outputs,
+                    "failed": failed_outputs,
+                    "success_count": success_count,
+                    "fail_count": fail_count,
+                },
+                error=failed_outputs[0]["error"] if failed_outputs else None,
+            )
+        except Exception as e:
+            return OperationResult(
+                success=False,
+                warnings=warnings,
+                changed_count=success_count,
+                artifacts={
+                    "output_dir": str(Path(output_dir)),
+                    "outputs": outputs,
+                    "failed": failed_outputs,
+                    "success_count": success_count,
+                    "fail_count": fail_count,
+                },
+                error=str(e),
+            )
+
+    def harden_document(
+        self,
+        source_path: str,
+        output_path: Optional[str] = None,
+        options: Optional[dict[str, Any]] = None,
+    ) -> OperationResult:
+        """
+        Security/privacy hardening in one pass.
+
+        Supported options:
+            - remove_author: bool
+            - remove_comments: bool
+            - remove_tracking: bool
+            - set_distribution: bool
+            - scan_personal_info: bool
+            - pii_patterns: dict[str, str]
+            - pii_sample_limit: int
+            - document_password: str
+            - strict_password: bool
+        """
+        merged: dict[str, Any] = {
+            "remove_author": True,
+            "remove_comments": True,
+            "remove_tracking": True,
+            "set_distribution": True,
+            "scan_personal_info": False,
+            "pii_patterns": None,
+            "pii_sample_limit": 5,
+            "document_password": "",
+            "strict_password": False,
+        }
+        if options:
+            merged.update(options)
+
+        warnings: list[str] = []
+        changed_count = 0
+        artifacts: dict[str, Any] = {}
+
+        try:
+            hwp = self._get_hwp()
+            hwp.open(source_path)
+
+            if bool(merged.get("scan_personal_info", False)):
+                text = self._extract_text_for_scan(hwp)
+                pii_counts, pii_samples, pii_total = self._detect_pii_patterns(
+                    text=text,
+                    patterns=merged.get("pii_patterns"),
+                    sample_limit=int(merged.get("pii_sample_limit", 5) or 5),
+                )
+                artifacts["pii_counts"] = pii_counts
+                artifacts["pii_samples"] = pii_samples
+                artifacts["pii_total"] = pii_total
+                if pii_total > 0:
+                    warnings.append(f"개인정보 패턴 {pii_total}건 탐지")
+
+            if bool(merged.get("remove_author", True)):
+                try:
+                    if hasattr(hwp, "set_document_info"):
+                        hwp.set_document_info("author", "")
+                        hwp.set_document_info("company", "")
+                        changed_count += 1
+                    else:
+                        warnings.append("작성자 정보 제거 API를 찾지 못했습니다.")
+                except Exception as e:
+                    warnings.append(f"작성자 정보 제거 실패: {e}")
+
+            if bool(merged.get("remove_comments", True)):
+                removed = False
+                for method_name in ("delete_all_comments", "DeleteAllComments", "DeleteAllComment"):
+                    method = getattr(hwp, method_name, None)
+                    if not callable(method):
+                        continue
+                    try:
+                        method()
+                        removed = True
+                        changed_count += 1
+                        break
+                    except Exception:
+                        continue
+                if not removed:
+                    warnings.append("메모 제거 API를 찾지 못했습니다.")
+
+            if bool(merged.get("remove_tracking", True)):
+                accepted = False
+                for method_name in ("accept_all_changes", "AcceptAllChanges", "AcceptAllChange"):
+                    method = getattr(hwp, method_name, None)
+                    if not callable(method):
+                        continue
+                    try:
+                        method()
+                        accepted = True
+                        changed_count += 1
+                        break
+                    except Exception:
+                        continue
+                if not accepted:
+                    warnings.append("변경 추적 정리 API를 찾지 못했습니다.")
+
+            if bool(merged.get("set_distribution", True)):
+                distribution_set = False
+                for method_name in ("set_distribution_mode", "SetDistributionMode"):
+                    method = getattr(hwp, method_name, None)
+                    if not callable(method):
+                        continue
+                    try:
+                        method(True)
+                        distribution_set = True
+                        changed_count += 1
+                        break
+                    except Exception:
+                        continue
+                if not distribution_set:
+                    warnings.append("배포용 문서 설정 API를 찾지 못했습니다.")
+
+            save_path = output_path if output_path else source_path
+            password = str(merged.get("document_password", "") or "").strip()
+            strict_password = bool(merged.get("strict_password", False))
+            saved_ok, password_applied, save_warning = self._save_as_with_password(
+                hwp=hwp,
+                output_path=save_path,
+                password=password,
+            )
+            artifacts["output_path"] = save_path
+            artifacts["password_requested"] = bool(password)
+            artifacts["password_applied"] = bool(password_applied)
+
+            if not saved_ok:
+                return OperationResult(
+                    success=False,
+                    warnings=warnings,
+                    changed_count=changed_count,
+                    artifacts=artifacts,
+                    error="문서 저장에 실패했습니다.",
+                )
+
+            if save_warning:
+                if strict_password and password:
+                    return OperationResult(
+                        success=False,
+                        warnings=warnings + [save_warning],
+                        changed_count=changed_count,
+                        artifacts=artifacts,
+                        error=save_warning,
+                    )
+                warnings.append(save_warning)
+
+            return OperationResult(
+                success=True,
+                warnings=warnings,
+                changed_count=changed_count,
+                artifacts=artifacts,
+            )
+        except Exception as e:
+            return OperationResult(
+                success=False,
+                warnings=warnings,
+                changed_count=changed_count,
+                artifacts=artifacts,
+                error=str(e),
+            )
     
     # ==================== 蹂??湲곕뒫 ====================
     
@@ -457,37 +1284,18 @@ class HwpHandler:
         Returns:
             二쇱엯 寃곌낵
         """
-        try:
-            hwp = self._get_hwp()
-            
-            hwp.open(template_path)
-            
-            # ?꾨쫫?(Field)???곗씠???쎌엯
-            failed_fields = []
-            for field_name, value in data.items():
-                try:
-                    hwp.put_field_text(field_name, str(value))
-                except Exception as e:
-                    failed_fields.append(field_name)
-                    self._logger.debug(f"?꾨뱶 '{field_name}' 二쇱엯 ?ㅽ뙣: {e}")
-            
-            if failed_fields:
-                self._logger.info(f"二쇱엯?섏? ?딆? ?꾨뱶: {failed_fields}")
-            
-            hwp.save_as(output_path)
-            
-            return ConversionResult(
-                success=True,
-                source_path=template_path,
-                output_path=output_path
-            )
-            
-        except Exception as e:
-            return ConversionResult(
-                success=False,
-                source_path=template_path,
-                error_message=str(e)
-            )
+        result = self.fill_fields(
+            source_path=template_path,
+            values=data,
+            output_path=output_path,
+            ignore_missing=True,
+        )
+        return ConversionResult(
+            success=result.success,
+            source_path=template_path,
+            output_path=output_path if result.success else None,
+            error_message=result.error,
+        )
     
     def batch_inject_data(
         self,
@@ -495,6 +1303,7 @@ class HwpHandler:
         data_list: list[dict[str, str]],
         output_dir: str,
         filename_field: Optional[str] = None,
+        filename_template: Optional[str] = None,
         progress_callback: Optional[Callable[[int, int, str], None]] = None
     ) -> list[ConversionResult]:
         """
@@ -518,6 +1327,7 @@ class HwpHandler:
                 data_iterable=data_list,
                 output_dir=output_dir,
                 filename_field=filename_field,
+                filename_template=filename_template,
                 progress_callback=progress_callback,
                 total_count=len(data_list),
             ):
@@ -539,6 +1349,7 @@ class HwpHandler:
         data_iterable: Iterable[dict[str, str]],
         output_dir: str,
         filename_field: Optional[str] = None,
+        filename_template: Optional[str] = None,
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
         total_count: Optional[int] = None,
     ) -> Iterator[ConversionResult]:
@@ -558,10 +1369,23 @@ class HwpHandler:
             if progress_callback:
                 progress_callback(idx, total, f"?앹꽦 {idx}/{total if total > 0 else '?'}")
 
-            if filename_field and filename_field in data:
-                from ..utils.filename_sanitizer import sanitize_filename
+            from ..utils.filename_sanitizer import sanitize_filename
 
+            if filename_template:
+                rendered_name = self._render_filename_template(
+                    template=filename_template,
+                    row_data=data,
+                    index=idx,
+                    fallback_stem=template.stem,
+                )
+                safe_name = sanitize_filename(rendered_name)
+                if not safe_name:
+                    safe_name = f"{template.stem}_{idx:04d}"
+                output_name = safe_name if safe_name.lower().endswith(".hwp") else f"{safe_name}.hwp"
+            elif filename_field and filename_field in data:
                 safe_name = sanitize_filename(str(data[filename_field]))
+                if not safe_name:
+                    safe_name = f"{template.stem}_{idx:04d}"
                 output_name = f"{safe_name}.hwp"
             else:
                 output_name = f"{template.stem}_{idx:04d}.hwp"
@@ -576,7 +1400,7 @@ class HwpHandler:
         self,
         source_path: str,
         output_path: Optional[str] = None,
-        options: Optional[dict[str, bool]] = None
+        options: Optional[dict[str, Any]] = None
     ) -> ConversionResult:
         """
         臾몄꽌 硫뷀??곗씠???뺣━
@@ -593,60 +1417,16 @@ class HwpHandler:
         Returns:
             ?뺣━ 寃곌낵
         """
-        default_options = {
-            "remove_author": True,
-            "remove_comments": True,
-            "remove_tracking": True,
-            "set_distribution": True,
-        }
-        
-        if options:
-            default_options.update(options)
-        
-        try:
-            hwp = self._get_hwp()
-            
-            hwp.open(source_path)
-            
-            if default_options["remove_author"]:
-                try:
-                    hwp.set_document_info("author", "")
-                    hwp.set_document_info("company", "")
-                except Exception as e:
-                    self._logger.warning(f"?묒꽦???뺣낫 ?쒓굅 ?ㅽ뙣: {e}")
-            
-            if default_options["remove_comments"]:
-                try:
-                    hwp.delete_all_comments()
-                except Exception as e:
-                    self._logger.warning(f"硫붾え ?쒓굅 ?ㅽ뙣: {e}")
-            
-            if default_options["remove_tracking"]:
-                try:
-                    hwp.accept_all_changes()
-                except Exception as e:
-                    self._logger.warning(f"蹂寃?異붿쟻 ?댁슜 ?섎씫 ?ㅽ뙣: {e}")
-            
-            if default_options["set_distribution"]:
-                try:
-                    hwp.set_distribution_mode(True)
-                except Exception as e:
-                    self._logger.warning(f"諛고룷??臾몄꽌 ?ㅼ젙 ?ㅽ뙣: {e}")
-            
-            # ???
-            save_path = output_path if output_path else source_path
-            hwp.save_as(save_path)
-            
-            return ConversionResult(
-                success=True,
-                source_path=source_path,
-                output_path=save_path
-            )
-            
-        except Exception as e:
-            return ConversionResult(
-                success=False,
-                source_path=source_path,
-                error_message=str(e)
-            )
+        result = self.harden_document(source_path=source_path, output_path=output_path, options=options)
+        output = None
+        if isinstance(result.artifacts, dict):
+            maybe_output = result.artifacts.get("output_path")
+            if maybe_output:
+                output = str(maybe_output)
+        return ConversionResult(
+            success=result.success,
+            source_path=source_path,
+            output_path=output,
+            error_message=result.error or ("\n".join(result.warnings) if result.warnings else None),
+        )
 

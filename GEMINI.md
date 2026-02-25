@@ -22,6 +22,8 @@
 
 ### 코어 모듈 (`src/core/`)
 - `hwp_handler.py` - HWP 파일 조작 (변환, 병합, 분할)
+- `action_runner.py` - 범용 Run/Execute 액션 실행 및 프리셋
+- `capability_mapper.py` - pyhwpx 기능 커버리지 매핑
 - `excel_handler.py` - Excel/CSV 읽기/쓰기
 - `template_store.py` - 내장 템플릿 관리
 - `macro_recorder.py` - 매크로 기록/재생
@@ -71,6 +73,8 @@ hwp-master/
 ├── src/
 │   ├── core/                  # 핵심 비즈니스 로직
 │   │   ├── hwp_handler.py     # HWP 제어 (pyhwpx)
+│   │   ├── action_runner.py   # 범용 액션 실행기
+│   │   ├── capability_mapper.py # pyhwpx 기능 커버리지 매핑
 │   │   ├── excel_handler.py   # Excel 처리 (openpyxl)
 │   │   ├── template_store.py  # 템플릿 관리
 │   │   ├── macro_recorder.py  # 매크로 기록/재생
@@ -104,6 +108,7 @@ hwp-master/
 │   │   │   ├── bookmark_page.py    # 북마크
 │   │   │   ├── hyperlink_page.py   # 링크 검사
 │   │   │   ├── image_extractor_page.py # 이미지 추출
+│   │   │   ├── action_console_page.py # 고급 액션 콘솔
 │   │   │   └── settings_page.py    # 설정
 │   │   └── widgets/           # 공통 위젯
 │   │       ├── file_list.py        # 파일 목록

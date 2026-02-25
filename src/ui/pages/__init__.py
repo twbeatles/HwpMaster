@@ -30,6 +30,7 @@ _PAGE_MODULES: dict[str, str] = {
     "BookmarkPage": ".bookmark_page",
     "HyperlinkPage": ".hyperlink_page",
     "ImageExtractorPage": ".image_extractor_page",
+    "ActionConsolePage": ".action_console_page",
 }
 
 __all__ = list(_PAGE_MODULES.keys())

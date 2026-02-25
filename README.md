@@ -14,7 +14,7 @@ HWP Master는 한글(HWP) 문서 작업을 자동화하여 업무 효율을 극�
 - **🎨 모던 UI**: PySide6 기반의 세련된 다크모드 대시보드 제공
 - **🔧 올인원**: 변환, 병합, 분할, 데이터 주입, 서식 교정 등 필수 기능 통합
 - **⚡ 고성능**: pyhwpx 기반의 빠른 처리 속도와 안정적인 자동화
-- **🛡️ 안전성**: 문서 암호화/해제 및 메타데이터 정리 기능 제공
+- **🛡️ 안전성**: 메타데이터 정리, 배포용 설정, 변경 추적 정리 기능 제공
 
 ---
 
@@ -132,6 +132,8 @@ hwp-master/
 ├── src/
 │   ├── core/                  # 핵심 비즈니스 로직
 │   │   ├── hwp_handler.py     # HWP 제어 (pyhwpx)
+│   │   ├── action_runner.py   # 범용 Run/Execute 액션 실행기
+│   │   ├── capability_mapper.py # pyhwpx 커버리지/능력 매핑
 │   │   ├── excel_handler.py   # Excel 처리 (openpyxl)
 │   │   ├── template_store.py  # 템플릿 관리
 │   │   ├── macro_recorder.py  # 매크로 기록/재생
@@ -165,6 +167,7 @@ hwp-master/
 │   │   │   ├── bookmark_page.py    # 북마크
 │   │   │   ├── hyperlink_page.py   # 링크 검사
 │   │   │   ├── image_extractor_page.py # 이미지 추출
+│   │   │   ├── action_console_page.py # 고급 액션 콘솔
 │   │   │   └── settings_page.py    # 설정
 │   │   └── widgets/           # 공통 위젯
 │   │       ├── file_list.py        # 파일 목록
@@ -189,7 +192,7 @@ hwp-master/
 ## 📚 문서
 
 - 코딩 가이드: `CLAUDE.md`
-- 점검 문서: `PROJECT_AUDIT.md`, `PROJECT_AUDIT_EXTRA.md`
+- 종합 감사 문서: `PROJECT_AUDIT_PYHWPX.md`
 
 ---
 
@@ -203,3 +206,27 @@ hwp-master/
 ## 📄 라이선스
 
 이 프로젝트는 [MIT License](LICENSE)를 따릅니다. 누구나 자유롭게 수정 및 배포할 수 있습니다.
+
+## 최근 업데이트 (2026-02-25)
+
+- 메타정보 정리 기능 확장
+  - 작성자/주석/변경추적/배포옵션 선택 적용
+  - 개인정보 패턴 스캔(주민번호/연락처/이메일 등)
+  - 문서 암호 설정(환경 지원 시) + strict 실패 옵션
+- 데이터 주입 기능 확장
+  - 파일명 생성 필드 지정
+  - 파일명 템플릿 지정 (`{부서}_{성명}_{index}` 형식)
+- 코어 API 확장
+  - `HwpHandler.harden_document`, `scan_personal_info`, `list_fields`, `fill_fields`, `get_meta_tags`, `set_meta_tags`, `mail_merge`
+
+## 최근 업데이트 (2026-02-25, Phase 3/4)
+
+- Phase 3: `execute_action` 기반 빌트인 프리셋 추가
+  - `table_professional_style`, `table_dense_grid`
+  - `shape_presentation_emphasis`
+  - `image_print_enhance`, `image_watermark_light`
+  - Action Console에서 프리셋을 JSON으로 불러오기/즉시 실행 가능
+- Phase 4: 실문서 기반 정확도 보강 테스트 추가
+  - `tests/test_real_hwp_doc_diff_smart_toc.py`
+  - 실제 HWP 문서를 생성해 `DocDiff.compare`, `SmartTOC.extract_toc` 검증
+  - 기본은 skip, 실행 시 `HWPMASTER_REAL_DOC_TESTS=1` 필요

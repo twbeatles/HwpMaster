@@ -23,6 +23,10 @@ class TestMainWindowLazyPages(unittest.TestCase):
 
         self._tmp = tempfile.TemporaryDirectory()
         self._settings = SettingsManager(config_dir=self._tmp.name)
+        self._settings.set("default_convert_format", "HWPX")
+        self._settings.set("sidebar_collapsed", True)
+        self._settings.set("window_width", 1320)
+        self._settings.set("window_height", 860)
 
         self._patcher = patch("src.ui.main_window.get_settings_manager", return_value=self._settings)
         self._patcher.start()
@@ -49,3 +53,8 @@ class TestMainWindowLazyPages(unittest.TestCase):
         first = self.window.hyperlink_page
         self.window._on_page_changed(15)
         self.assertIs(first, self.window.hyperlink_page)
+
+    def test_settings_are_applied_on_startup(self) -> None:
+        self.assertTrue(self.window.sidebar.is_collapsed)
+        checked = [b.text() for b in self.window.convert_page.format_buttons if b.isChecked()]
+        self.assertEqual(checked, ["HWPX"])

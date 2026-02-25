@@ -14,6 +14,7 @@ class TestPagesLazyImport(unittest.TestCase):
         pages = self._reload_pages_package()
 
         self.assertIn("TemplatePage", getattr(pages, "__all__", []))
+        self.assertIn("ActionConsolePage", getattr(pages, "__all__", []))
         self.assertNotIn("src.ui.pages.template_page", sys.modules)
 
         cls = pages.TemplatePage

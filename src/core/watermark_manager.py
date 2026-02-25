@@ -162,6 +162,25 @@ class WatermarkManager:
     def get_presets() -> dict[str, WatermarkConfig]:
         """프리셋 목록 반환"""
         return WATERMARK_PRESETS.copy()
+
+    @staticmethod
+    def _hex_to_rgb(color: str) -> tuple[int, int, int]:
+        text = str(color or "").strip().lstrip("#")
+        if len(text) == 3:
+            text = "".join(ch * 2 for ch in text)
+        if len(text) != 6:
+            return (128, 128, 128)
+        try:
+            return (int(text[0:2], 16), int(text[2:4], 16), int(text[4:6], 16))
+        except Exception:
+            return (128, 128, 128)
+
+    @staticmethod
+    def _set_attr_if_exists(target: Any, name: str, value: Any) -> bool:
+        if hasattr(target, name):
+            setattr(target, name, value)
+            return True
+        return False
     
     def apply_watermark(
         self,
@@ -236,11 +255,33 @@ class WatermarkManager:
             hwp.HAction.GetDefault("InsertWatermark", pset.HSet)
             
             pset.Type = 0  # 텍스트
-            pset.Text = watermark_text
-            pset.FontName = config.font_name
-            pset.FontSize = config.font_size
-            pset.Angle = config.rotation
-            pset.Transparency = 100 - config.opacity
+            self._set_attr_if_exists(pset, "Text", watermark_text)
+            self._set_attr_if_exists(pset, "FontName", config.font_name)
+            self._set_attr_if_exists(pset, "FontSize", int(config.font_size))
+            self._set_attr_if_exists(pset, "Angle", int(config.rotation))
+            self._set_attr_if_exists(pset, "Transparency", 100 - int(config.opacity))
+
+            r, g, b = self._hex_to_rgb(config.color)
+            color_value = None
+            try:
+                color_value = hwp.RGBColor(r, g, b)
+            except Exception:
+                color_value = None
+            if color_value is not None:
+                self._set_attr_if_exists(pset, "TextColor", color_value)
+                self._set_attr_if_exists(pset, "Color", color_value)
+
+            position_map = {
+                WatermarkPosition.CENTER: 0,
+                WatermarkPosition.TOP_LEFT: 1,
+                WatermarkPosition.TOP_RIGHT: 2,
+                WatermarkPosition.BOTTOM_LEFT: 3,
+                WatermarkPosition.BOTTOM_RIGHT: 4,
+                WatermarkPosition.DIAGONAL: 5,
+            }
+            pos = position_map.get(config.position, 5)
+            self._set_attr_if_exists(pset, "Position", pos)
+            self._set_attr_if_exists(pset, "PosType", pos)
             
             hwp.HAction.Execute("InsertWatermark", pset.HSet)
             
@@ -269,6 +310,22 @@ class WatermarkManager:
             hwp.HAction.Execute("DrawTextBox", pset.HSet)
             
             # 텍스트 입력
+            hwp.HAction.GetDefault("InsertText", hwp.HParameterSet.HInsertText.HSet)
+            hwp.HParameterSet.HInsertText.Text = config.text
+            hwp.HAction.Execute("InsertText", hwp.HParameterSet.HInsertText.HSet)
+
+            # 폰트/크기/색상 반영 (지원되는 환경에서만 적용)
+            try:
+                hwp.HAction.GetDefault("CharShape", hwp.HParameterSet.HCharShape.HSet)
+                hwp.HParameterSet.HCharShape.FaceNameHangul = config.font_name
+                hwp.HParameterSet.HCharShape.FaceNameLatin = config.font_name
+                hwp.HParameterSet.HCharShape.Height = hwp.PointToHwpUnit(float(config.font_size))
+                r, g, b = self._hex_to_rgb(config.color)
+                hwp.HParameterSet.HCharShape.TextColor = hwp.RGBColor(r, g, b)
+                hwp.HAction.Execute("CharShape", hwp.HParameterSet.HCharShape.HSet)
+            except Exception as style_e:
+                self._logger.debug(f"대체 워터마크 문자 스타일 적용 실패(무시): {style_e}")
+
             hwp.HAction.Run("Cancel")
             
         except Exception as e:
@@ -287,8 +344,20 @@ class WatermarkManager:
             hwp.HAction.GetDefault("InsertWatermark", pset.HSet)
             
             pset.Type = 1  # 이미지
-            pset.ImagePath = config.image_path
-            pset.Transparency = 100 - config.opacity
+            self._set_attr_if_exists(pset, "ImagePath", config.image_path)
+            self._set_attr_if_exists(pset, "Transparency", 100 - int(config.opacity))
+
+            position_map = {
+                WatermarkPosition.CENTER: 0,
+                WatermarkPosition.TOP_LEFT: 1,
+                WatermarkPosition.TOP_RIGHT: 2,
+                WatermarkPosition.BOTTOM_LEFT: 3,
+                WatermarkPosition.BOTTOM_RIGHT: 4,
+                WatermarkPosition.DIAGONAL: 5,
+            }
+            pos = position_map.get(config.position, 0)
+            self._set_attr_if_exists(pset, "Position", pos)
+            self._set_attr_if_exists(pset, "PosType", pos)
             
             hwp.HAction.Execute("InsertWatermark", pset.HSet)
             

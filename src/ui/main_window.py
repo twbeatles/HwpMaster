@@ -57,7 +57,7 @@ class Sidebar(QFrame):
         ("기본", [("🏠", "홈"), ("🔄", "변환"), ("🔗", "병합/분할"), ("🧩", "데이터 주입"), ("🧹", "메타정보 정리")]),
         ("고급", [("📁", "템플릿 스토어"), ("🎬", "매크로"), ("🧪", "정규식 치환")]),
         ("분석", [("🕵", "서식 교정"), ("📊", "표 교정"), ("📄", "문서 비교"), ("📚", "스마트 목차")]),
-        ("생산성", [("💧", "워터마크"), ("📑", "헤더/푸터"), ("🔖", "북마크"), ("🔍", "링크 검사"), ("🖼", "이미지 추출")]),
+        ("생산성", [("💧", "워터마크"), ("📑", "헤더/푸터"), ("🔖", "북마크"), ("🔍", "링크 검사"), ("🖼", "이미지 추출"), ("🧰", "액션 콘솔")]),
         ("", [("⚙", "설정")]),
     ]
 
@@ -202,24 +202,37 @@ class Sidebar(QFrame):
             btn.setChecked(i == index)
         self.page_changed.emit(index)
 
+    @property
+    def is_collapsed(self) -> bool:
+        return self._is_collapsed
+
     def _toggle_collapse(self) -> None:
-        self._is_collapsed = not self._is_collapsed
+        self.set_collapsed(not self._is_collapsed, animate=True)
+
+    def set_collapsed(self, collapsed: bool, *, animate: bool = False) -> None:
+        if self._is_collapsed == bool(collapsed):
+            return
+        self._is_collapsed = bool(collapsed)
         target_width = 70 if self._is_collapsed else 280
 
-        animation = QPropertyAnimation(self, b"minimumWidth")
-        animation.setDuration(200)
-        animation.setEndValue(target_width)
-        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        if animate:
+            animation = QPropertyAnimation(self, b"minimumWidth")
+            animation.setDuration(200)
+            animation.setEndValue(target_width)
+            animation.setEasingCurve(QEasingCurve.Type.OutCubic)
 
-        animation2 = QPropertyAnimation(self, b"maximumWidth")
-        animation2.setDuration(200)
-        animation2.setEndValue(target_width)
-        animation2.setEasingCurve(QEasingCurve.Type.OutCubic)
+            animation2 = QPropertyAnimation(self, b"maximumWidth")
+            animation2.setDuration(200)
+            animation2.setEndValue(target_width)
+            animation2.setEasingCurve(QEasingCurve.Type.OutCubic)
 
-        group = QParallelAnimationGroup(self)
-        group.addAnimation(animation)
-        group.addAnimation(animation2)
-        group.start()
+            group = QParallelAnimationGroup(self)
+            group.addAnimation(animation)
+            group.addAnimation(animation2)
+            group.start()
+        else:
+            self.setMinimumWidth(target_width)
+            self.setMaximumWidth(target_width)
 
         if self._is_collapsed:
             self._toggle_btn.setText("▶")
@@ -253,7 +266,7 @@ class Sidebar(QFrame):
 class MainWindow(QMainWindow):
     """메인 윈도우"""
 
-    _TOTAL_PAGE_COUNT = 18
+    _TOTAL_PAGE_COUNT = 19
     _LAZY_PAGE_SPECS: dict[int, tuple[str, str, str]] = {
         5: (".pages.template_page", "TemplatePage", "template_page"),
         6: (".pages.macro_page", "MacroPage", "macro_page"),
@@ -267,6 +280,7 @@ class MainWindow(QMainWindow):
         14: (".pages.bookmark_page", "BookmarkPage", "bookmark_page"),
         15: (".pages.hyperlink_page", "HyperlinkPage", "hyperlink_page"),
         16: (".pages.image_extractor_page", "ImageExtractorPage", "image_extractor_page"),
+        17: (".pages.action_console_page", "ActionConsolePage", "action_console_page"),
     }
 
     def __init__(self) -> None:
@@ -275,7 +289,10 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("HWP Master")
         self.setMinimumSize(1200, 800)
-        self.resize(1400, 900)
+        self.resize(
+            int(self._settings.get("window_width", 1400)),
+            int(self._settings.get("window_height", 900)),
+        )
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -316,10 +333,12 @@ class MainWindow(QMainWindow):
         self.bookmark_page = None
         self.hyperlink_page = None
         self.image_extractor_page = None
+        self.action_console_page = None
 
         self._init_page_stack()
         self._sync_settings_page()
         self._connect_signals()
+        self.sidebar.set_collapsed(bool(self._settings.get("sidebar_collapsed", False)), animate=False)
 
     def _init_page_stack(self) -> None:
         for index in range(self._TOTAL_PAGE_COUNT):
@@ -339,7 +358,7 @@ class MainWindow(QMainWindow):
             2: self.merge_split_page,
             3: self.data_inject_page,
             4: self.metadata_page,
-            17: self.settings_page,
+            18: self.settings_page,
         }
         page = page_map.get(index)
         if page is None:
@@ -401,6 +420,15 @@ class MainWindow(QMainWindow):
             self.convert_page.output_label.setText(default_output_dir)
             self.metadata_page.output_label.setText(default_output_dir)
             self.data_inject_page.output_label.setText(default_output_dir)
+
+        default_convert_format = str(self._settings.get("default_convert_format", "PDF")).upper()
+        matched = False
+        for btn in self.convert_page.format_buttons:
+            is_match = btn.text().upper() == default_convert_format
+            btn.setChecked(is_match)
+            matched = matched or is_match
+        if not matched and self.convert_page.format_buttons:
+            self.convert_page.format_buttons[0].setChecked(True)
 
         preset = self._settings.get("theme_preset", "Dark (기본)")
         if hasattr(self.settings_page, "theme_combo"):
@@ -518,6 +546,7 @@ class MainWindow(QMainWindow):
             if btn.isChecked():
                 target_format = btn.text()
                 break
+        self._settings.set("default_convert_format", target_format, defer=True)
 
         self.convert_page.progress_card.setVisible(True)
         self.convert_page.progress_card.set_status("변환 준비 중...")
@@ -706,7 +735,20 @@ class MainWindow(QMainWindow):
         self.data_inject_page.execute_btn.setEnabled(False)
 
         self.set_busy(True)
-        self._current_worker = DataInjectWorker(template, data_file, output_dir)
+        filename_field = ""
+        filename_template = ""
+        if hasattr(self.data_inject_page, "filename_field_edit"):
+            filename_field = self.data_inject_page.filename_field_edit.text().strip()
+        if hasattr(self.data_inject_page, "filename_template_edit"):
+            filename_template = self.data_inject_page.filename_template_edit.text().strip()
+
+        self._current_worker = DataInjectWorker(
+            template,
+            data_file,
+            output_dir,
+            filename_field=filename_field or None,
+            filename_template=filename_template or None,
+        )
         self._current_worker.progress.connect(
             lambda c, t, n: (
                 self.data_inject_page.progress_card.set_count(c, t),
@@ -753,7 +795,31 @@ class MainWindow(QMainWindow):
 
         self.set_busy(True)
         out_dir = str(Path(self._get_default_output_dir()) / "metadata_cleaned")
-        self._current_worker = MetadataCleanWorker(files, output_dir=out_dir)
+        options = {
+            "remove_author": bool(getattr(self.metadata_page, "remove_author_check", None).isChecked())
+            if hasattr(self.metadata_page, "remove_author_check")
+            else True,
+            "remove_comments": bool(getattr(self.metadata_page, "remove_comments_check", None).isChecked())
+            if hasattr(self.metadata_page, "remove_comments_check")
+            else True,
+            "remove_tracking": bool(getattr(self.metadata_page, "remove_tracking_check", None).isChecked())
+            if hasattr(self.metadata_page, "remove_tracking_check")
+            else True,
+            "set_distribution": bool(getattr(self.metadata_page, "set_distribution_check", None).isChecked())
+            if hasattr(self.metadata_page, "set_distribution_check")
+            else True,
+            "scan_personal_info": bool(getattr(self.metadata_page, "scan_pii_check", None).isChecked())
+            if hasattr(self.metadata_page, "scan_pii_check")
+            else False,
+            "document_password": getattr(self.metadata_page, "password_edit", None).text().strip()
+            if hasattr(self.metadata_page, "password_edit")
+            else "",
+            "strict_password": bool(getattr(self.metadata_page, "strict_password_check", None).isChecked())
+            if hasattr(self.metadata_page, "strict_password_check")
+            else False,
+        }
+
+        self._current_worker = MetadataCleanWorker(files, output_dir=out_dir, options=options)
         self._current_worker.progress.connect(lambda c, t, n: self.metadata_page.progress_card.set_count(c, t))
         self._current_worker.status_changed.connect(lambda s: self.metadata_page.progress_card.set_status(s))
         self._current_worker.finished_with_result.connect(self._on_metadata_finished)
@@ -772,11 +838,21 @@ class MainWindow(QMainWindow):
             data = result.data or {}
             success_count = data.get("success_count", 0)
             fail_count = data.get("fail_count", 0)
+            pii_total = int(data.get("pii_total", 0) or 0)
+            password_not_applied = int(data.get("password_not_applied", 0) or 0)
             self.metadata_page.progress_card.set_completed(success_count, fail_count)
+            detail_lines = [
+                f"메타정보 정리가 완료되었습니다.",
+                f"성공: {success_count}개, 실패: {fail_count}개",
+            ]
+            if pii_total > 0:
+                detail_lines.append(f"개인정보 패턴 탐지: {pii_total}건")
+            if password_not_applied > 0:
+                detail_lines.append(f"암호 미적용 파일: {password_not_applied}개")
             QMessageBox.information(
                 self,
                 "완료",
-                f"메타정보 정리가 완료되었습니다.\n성공: {success_count}개, 실패: {fail_count}개",
+                "\n".join(detail_lines),
             )
         else:
             self.metadata_page.progress_card.set_error(result.error_message or "오류 발생")
@@ -794,6 +870,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # noqa: N802
         try:
+            self._settings.set("window_width", int(self.width()), defer=True)
+            self._settings.set("window_height", int(self.height()), defer=True)
+            self._settings.set("sidebar_collapsed", bool(self.sidebar.is_collapsed), defer=True)
             self._settings.flush()
         except Exception:
             pass
