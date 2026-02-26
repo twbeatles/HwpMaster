@@ -34,12 +34,12 @@ class FeatureCard(QFrame):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(10)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(14)
         
         # 아이콘 + 제목 (수평 레이아웃)
         header_layout = QHBoxLayout()
-        header_layout.setSpacing(12)
+        header_layout.setSpacing(16)
         
         # 이모지 아이콘 (우선) 또는 파일 아이콘
         if icon_emoji:
@@ -60,7 +60,7 @@ class FeatureCard(QFrame):
         # 제목
         title_label = QLabel(title)
         title_label.setProperty("class", "card-title")
-        title_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        title_label.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
         title_label.setStyleSheet("background: transparent;")
         header_layout.addWidget(title_label)
         header_layout.addStretch()

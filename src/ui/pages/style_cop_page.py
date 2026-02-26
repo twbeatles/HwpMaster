@@ -41,7 +41,7 @@ class PresetCard(QFrame):
         self.rule = rule
         self.setProperty("class", "card")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedHeight(100)
+        self.setMinimumHeight(110)
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)

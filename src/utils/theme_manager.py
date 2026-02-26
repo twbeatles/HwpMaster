@@ -13,26 +13,26 @@ import re
 @dataclass
 class ThemeColors:
     """테마 색상"""
-    primary: str = "#8957e5"
-    primary2: str = "#6e40c9"
-    primary_light: str = "#a371f7"
-    primary_dark: str = "#553098"
-    secondary: str = "#238636"
-    background: str = "#0d1117"
-    surface: str = "#161b22"
-    surface_alt: str = "#1c2128"
-    surface_muted: str = "#21262d"
-    border: str = "#30363d"
-    text_primary: str = "#e6edf3"
-    text_secondary: str = "#8b949e"
-    text_muted: str = "#484f58"
-    accent: str = "#58a6ff"
-    success: str = "#3fb950"
-    success_mid: str = "#2ea043"
-    success_dark: str = "#238636"
-    error: str = "#f85149"
-    error_dark: str = "#da3633"
-    warning: str = "#d29922"
+    primary: str = "#8b5cf6"  # Softer purple
+    primary2: str = "#7c3aed"
+    primary_light: str = "#a78bfa"
+    primary_dark: str = "#6d28d9"
+    secondary: str = "#10b981"  # Emerald green
+    background: str = "#0f1115"  # Darker, cooler background
+    surface: str = "#181b21"     # Slightly lighter than background
+    surface_alt: str = "#1f232b"
+    surface_muted: str = "#272c36"
+    border: str = "#333a45"
+    text_primary: str = "#f3f4f6" # Lighter text
+    text_secondary: str = "#9ca3af"
+    text_muted: str = "#6b7280"
+    accent: str = "#3b82f6"       # Blue accent
+    success: str = "#10b981"
+    success_mid: str = "#059669"
+    success_dark: str = "#047857"
+    error: str = "#ef4444"
+    error_dark: str = "#dc2626"
+    warning: str = "#f59e0b"
     white: str = "#ffffff"
 
     def to_tokens(self) -> dict[str, str]:
@@ -104,14 +104,14 @@ THEME_PRESETS: dict[str, ThemeColors] = {
     "Dark (기본)": ThemeColors(),
     "Dark Purple": ThemeColors(
         primary="#a855f7",
-        primary2="#7c3aed",
+        primary2="#9333ea",
         primary_light="#c084fc",
-        primary_dark="#5b21b6",
-        background="#0f0a1a",
-        surface="#1a1025",
-        surface_alt="#221333",
-        surface_muted="#2a1a3f",
-        border="#3a2756",
+        primary_dark="#7e22ce",
+        background="#0a0514",
+        surface="#130a24",
+        surface_alt="#1d0f36",
+        surface_muted="#28154a",
+        border="#362060",
         accent="#60a5fa",
     ),
     "Dark Blue": ThemeColors(
@@ -120,24 +120,24 @@ THEME_PRESETS: dict[str, ThemeColors] = {
         primary_light="#60a5fa",
         primary_dark="#1d4ed8",
         background="#0a0f1a",
-        surface="#101825",
-        surface_alt="#141f33",
-        surface_muted="#19243a",
-        border="#26344d",
-        accent="#58a6ff",
+        surface="#111827",
+        surface_alt="#1e293b",
+        surface_muted="#334155",
+        border="#475569",
+        accent="#8b5cf6",
     ),
     "Dark Green": ThemeColors(
-        primary="#22c55e",
-        primary2="#16a34a",
-        primary_light="#4ade80",
-        primary_dark="#15803d",
-        secondary="#8957e5",
-        background="#0a1a0f",
-        surface="#102518",
-        surface_alt="#142f20",
-        surface_muted="#193624",
-        border="#244a32",
-        accent="#58a6ff",
+        primary="#10b981",
+        primary2="#059669",
+        primary_light="#34d399",
+        primary_dark="#047857",
+        secondary="#8b5cf6",
+        background="#061411",
+        surface="#0f2620",
+        surface_alt="#17362d",
+        surface_muted="#204a3e",
+        border="#2b6353",
+        accent="#3b82f6",
     ),
     "Light": ThemeColors(
         primary="#7c3aed",
@@ -200,7 +200,7 @@ class ThemeManager:
 QMainWindow, QWidget {{
     background-color: {c.background};
     color: {c.text_primary};
-    font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", sans-serif;
 }}
 
 /* 사이드바 */

@@ -77,25 +77,25 @@ class Sidebar(QFrame):
 
         header_widget = QWidget()
         header_layout = QVBoxLayout(header_widget)
-        header_layout.setContentsMargins(12, 20, 12, 16)
-        header_layout.setSpacing(2)
+        header_layout.setContentsMargins(16, 24, 16, 20)
+        header_layout.setSpacing(8)
 
         logo_container = QWidget()
         logo_inner = QHBoxLayout(logo_container)
         logo_inner.setContentsMargins(8, 0, 8, 0)
-        logo_inner.setSpacing(12)
+        logo_inner.setSpacing(14)
 
         logo_icon = QLabel("📄")
-        logo_icon.setStyleSheet("font-size: 28px; background: transparent;")
+        logo_icon.setStyleSheet("font-size: 30px; background: transparent;")
         logo_inner.addWidget(logo_icon)
 
         title_container = QWidget()
         title_inner = QVBoxLayout(title_container)
         title_inner.setContentsMargins(0, 0, 0, 0)
-        title_inner.setSpacing(0)
+        title_inner.setSpacing(2)
 
         self._title_label = QLabel("HWP Master")
-        self._title_label.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
+        self._title_label.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
         self._title_label.setStyleSheet("color: #ffffff; background: transparent;")
         title_inner.addWidget(self._title_label)
 
@@ -132,7 +132,7 @@ class Sidebar(QFrame):
 
         scroll_content = QWidget()
         self._scroll_layout = QVBoxLayout(scroll_content)
-        self._scroll_layout.setContentsMargins(12, 10, 12, 10)
+        self._scroll_layout.setContentsMargins(16, 12, 16, 12)
         self._scroll_layout.setSpacing(4)
 
         btn_index = 0

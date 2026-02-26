@@ -60,7 +60,6 @@ class HomePage(QWidget):
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.setSpacing(0)
         
-        # 스크롤 영역
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -78,11 +77,11 @@ class HomePage(QWidget):
         hero.setStyleSheet("""
             #heroBanner {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 rgba(137, 87, 229, 0.18),
-                    stop:0.5 rgba(88, 166, 255, 0.10),
-                    stop:1 rgba(137, 87, 229, 0.06));
-                border: none;
-                border-radius: 20px;
+                    stop:0 rgba(139, 92, 246, 0.15),
+                    stop:0.5 rgba(59, 130, 246, 0.10),
+                    stop:1 rgba(139, 92, 246, 0.05));
+                border: 1px solid rgba(51, 58, 69, 0.5);
+                border-radius: 24px;
             }
             #heroBanner * {
                 background: transparent;
@@ -90,21 +89,21 @@ class HomePage(QWidget):
             }
         """)
         hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(40, 36, 40, 36)
-        hero_layout.setSpacing(8)
+        hero_layout.setContentsMargins(48, 48, 48, 48)
+        hero_layout.setSpacing(12)
 
         hero_icon = QLabel("📄")
         hero_icon.setStyleSheet("font-size: 42px;")
         hero_layout.addWidget(hero_icon)
 
         hero_title = QLabel("HWP Master")
-        hero_title.setFont(QFont("Segoe UI", 30, QFont.Weight.Bold))
+        hero_title.setFont(QFont("Segoe UI", 32, QFont.Weight.Bold))
         hero_title.setStyleSheet("color: #ffffff;")
         hero_layout.addWidget(hero_title)
 
         hero_subtitle = QLabel("HWP 업무 자동화를 위한 올인원 도구")
-        hero_subtitle.setFont(QFont("Segoe UI", 15))
-        hero_subtitle.setStyleSheet("color: #8b949e;")
+        hero_subtitle.setFont(QFont("Segoe UI", 16))
+        hero_subtitle.setStyleSheet("color: #9ca3af;")
         hero_layout.addWidget(hero_subtitle)
 
         layout.addSpacing(32)
