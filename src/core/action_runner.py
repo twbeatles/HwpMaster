@@ -385,6 +385,7 @@ class ActionRunner:
         changed_count = 0
         failed_commands: list[dict[str, Any]] = []
         executed: list[dict[str, Any]] = []
+        succeeded_commands: list[dict[str, Any]] = []
 
         def _run_one(h: HwpHandler, cmd: ActionCommand) -> OperationResult:
             normalized = cmd.normalize()
@@ -400,12 +401,14 @@ class ActionRunner:
                     for raw in commands:
                         result = _run_one(owned, raw)
                         normalized = raw.normalize()
-                        executed.append(asdict(normalized))
+                        normalized_dict = asdict(normalized)
+                        executed.append(normalized_dict)
                         if result.success:
                             changed_count += max(1, int(result.changed_count or 0))
+                            succeeded_commands.append(normalized_dict)
                         else:
                             failed_commands.append(
-                                {"command": asdict(normalized), "error": result.error or "unknown error"}
+                                {"command": normalized_dict, "error": result.error or "unknown error"}
                             )
                             warnings.append(f"{normalized.action_type}:{normalized.action_id} 실패")
                             if stop_on_error:
@@ -414,11 +417,13 @@ class ActionRunner:
                 for raw in commands:
                     result = _run_one(handler, raw)
                     normalized = raw.normalize()
-                    executed.append(asdict(normalized))
+                    normalized_dict = asdict(normalized)
+                    executed.append(normalized_dict)
                     if result.success:
                         changed_count += max(1, int(result.changed_count or 0))
+                        succeeded_commands.append(normalized_dict)
                     else:
-                        failed_commands.append({"command": asdict(normalized), "error": result.error or "unknown error"})
+                        failed_commands.append({"command": normalized_dict, "error": result.error or "unknown error"})
                         warnings.append(f"{normalized.action_type}:{normalized.action_id} 실패")
                         if stop_on_error:
                             break
@@ -428,7 +433,11 @@ class ActionRunner:
                 success=success,
                 warnings=warnings,
                 changed_count=changed_count,
-                artifacts={"executed": executed, "failed_commands": failed_commands},
+                artifacts={
+                    "executed": executed,
+                    "succeeded_commands": succeeded_commands,
+                    "failed_commands": failed_commands,
+                },
                 error=failed_commands[0]["error"] if failed_commands else None,
             )
         except Exception as e:
@@ -436,7 +445,11 @@ class ActionRunner:
                 success=False,
                 warnings=warnings,
                 changed_count=changed_count,
-                artifacts={"executed": executed, "failed_commands": failed_commands},
+                artifacts={
+                    "executed": executed,
+                    "succeeded_commands": succeeded_commands,
+                    "failed_commands": failed_commands,
+                },
                 error=str(e),
             )
 

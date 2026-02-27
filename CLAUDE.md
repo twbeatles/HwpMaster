@@ -21,7 +21,7 @@ src/
 ## 📂 프로젝트 구조
 
 ```
-hwp-master/
+HwpMaster/
 ├── main.py                    # 프로그램 진입점
 ├── requirements.txt           # 의존성 패키지 목록
 ├── hwp_master.spec            # PyInstaller 빌드 설정
@@ -142,7 +142,7 @@ class CustomWorker(BaseWorker):
 ## ⚠️ 금지 사항
 
 1. **Pandas/NumPy 사용 금지** - openpyxl로 대체
-2. **전역 상태 사용 금지** - 클래스 기반 설계
+2. **전역 상태 사용 지양** - 클래스 기반 설계(단, 명시된 공유 세션 예외 허용)
 3. **하드코딩된 경로 금지** - `Path` 사용
 4. **TODO/FIXME 주석 금지** - 완전한 코드 작성
 
@@ -167,3 +167,15 @@ python main.py
 - [ ] 에러 처리 완료됨
 - [ ] `__init__.py` 업데이트됨
 - [ ] 사이드바 메뉴 추가됨 (UI 추가 시)
+
+---
+
+## 📌 운영 정합성 메모 (2026-02-27)
+
+- 회귀 기준:
+  - `pytest -q` 결과 `57 passed, 2 skipped`
+- 전역 상태 원칙 예외:
+  - 일반적으로 전역 상태는 금지하되, 매크로 녹화는 `Action Console`과 `Macro Page` 간 세션 공유를 위해
+    `MacroRecorder`의 글로벌 녹화 상태를 사용함
+- 저장 정책 기본값:
+  - 신규/편집성 기능은 기본적으로 **원본 보존(새 파일 저장)**을 사용하고, 덮어쓰기는 명시 선택 시에만 허용

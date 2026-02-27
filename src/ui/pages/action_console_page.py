@@ -5,6 +5,7 @@ Advanced action console page.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any, Optional
 
 from PySide6.QtCore import Slot
@@ -93,6 +94,29 @@ class ActionConsolePage(QWidget):
         options_row.addStretch()
         layout.addLayout(options_row)
 
+        save_group = QGroupBox("저장 정책")
+        save_layout = QVBoxLayout(save_group)
+
+        save_mode_row = QHBoxLayout()
+        self.save_mode_combo = QComboBox()
+        self.save_mode_combo.addItem("새 파일 저장 (기본)", "new")
+        self.save_mode_combo.addItem("저장 안 함", "none")
+        self.save_mode_combo.addItem("원본 덮어쓰기", "overwrite")
+        self.save_mode_combo.currentIndexChanged.connect(self._on_save_mode_changed)
+        save_mode_row.addWidget(self.save_mode_combo, 1)
+        save_layout.addLayout(save_mode_row)
+
+        save_path_row = QHBoxLayout()
+        self.save_output_edit = QLineEdit()
+        self.save_output_edit.setPlaceholderText("새 파일 저장 경로 (비우면 기본 출력 폴더/action_console 자동 생성)")
+        save_path_row.addWidget(self.save_output_edit, 1)
+        save_browse_btn = QPushButton("저장 경로...")
+        save_browse_btn.clicked.connect(self._on_select_output_path)
+        save_path_row.addWidget(save_browse_btn)
+        save_layout.addLayout(save_path_row)
+
+        layout.addWidget(save_group)
+
         template_group = QGroupBox("사용자 템플릿")
         template_layout = QVBoxLayout(template_group)
 
@@ -138,6 +162,7 @@ class ActionConsolePage(QWidget):
         self.result_log.setReadOnly(True)
         result_layout.addWidget(self.result_log)
         layout.addWidget(result_group, 1)
+        self._on_save_mode_changed()
 
     def _reload_templates(self) -> None:
         current = self.template_combo.currentText()
@@ -180,6 +205,27 @@ class ActionConsolePage(QWidget):
         )
         if path:
             self.source_path_edit.setText(path)
+
+    @Slot()
+    def _on_select_output_path(self) -> None:
+        default_name = "action_console_edited.hwp"
+        source = self.source_path_edit.text().strip()
+        if source:
+            default_name = f"{Path(source).stem}_edited.hwp"
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "저장 경로 선택",
+            default_name,
+            "HWP 파일 (*.hwp)",
+        )
+        if path:
+            self.save_output_edit.setText(path)
+
+    @Slot()
+    def _on_save_mode_changed(self, _index: int = -1) -> None:
+        mode = str(self.save_mode_combo.currentData() or "new").strip().lower()
+        is_new_mode = mode == "new"
+        self.save_output_edit.setEnabled(is_new_mode)
 
     def _parse_editor_commands(self) -> list[dict[str, Any]]:
         raw = self.command_editor.toPlainText().strip()
@@ -285,6 +331,8 @@ class ActionConsolePage(QWidget):
             self.source_path_edit.text().strip(),
             commands,
             stop_on_error=self.stop_on_error_check.isChecked(),
+            save_mode=str(self.save_mode_combo.currentData() or "new"),
+            output_path=self.save_output_edit.text().strip(),
         )
         self.progress_card.cancelled.connect(self._worker.cancel)
         self._worker.progress.connect(
@@ -333,6 +381,12 @@ class ActionConsolePage(QWidget):
             lines.append("failed_commands:")
             for item in failed:
                 lines.append(json.dumps(item, ensure_ascii=False))
+        if artifacts.get("saved"):
+            lines.append(f"saved_path={artifacts.get('saved_path', '')}")
+        else:
+            save_mode = str(artifacts.get("save_mode", "")).strip().lower()
+            if save_mode and save_mode != "none":
+                lines.append(f"save_error={result.error_message or 'unknown'}")
         self.result_log.setPlainText("\n".join(lines))
 
     @Slot(str)

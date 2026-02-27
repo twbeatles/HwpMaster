@@ -772,11 +772,21 @@ class MainWindow(QMainWindow):
             data = result.data or {}
             success_count = data.get("success_count", 0)
             fail_count = data.get("fail_count", 0)
+            skipped_empty_rows = int(data.get("skipped_empty_rows", 0) or 0)
+            filename_collisions = int(data.get("filename_collisions", 0) or 0)
             self.data_inject_page.progress_card.set_completed(success_count, fail_count)
+            lines = [
+                "데이터 주입이 완료되었습니다.",
+                f"성공: {success_count}개, 실패: {fail_count}개",
+            ]
+            if skipped_empty_rows > 0:
+                lines.append(f"완전 빈 행 스킵: {skipped_empty_rows}개")
+            if filename_collisions > 0:
+                lines.append(f"파일명 충돌 자동 회피: {filename_collisions}건")
             QMessageBox.information(
                 self,
                 "완료",
-                f"데이터 주입이 완료되었습니다.\n성공: {success_count}개, 실패: {fail_count}개",
+                "\n".join(lines),
             )
         else:
             self.data_inject_page.progress_card.set_error(result.error_message or "오류 발생")

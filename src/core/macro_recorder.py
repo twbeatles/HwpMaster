@@ -16,6 +16,8 @@ from enum import Enum
 
 class MacroActionType(Enum):
     """매크로 액션 타입"""
+    RUN_ACTION = "run_action"
+    EXECUTE_ACTION = "execute_action"
     OPEN_FILE = "open_file"
     SAVE_FILE = "save_file"
     FIND_REPLACE = "find_replace"
@@ -74,6 +76,21 @@ class MacroAction:
         """Python 코드로 변환"""
         action = self.action_type
         params = self.params
+        if action == "run_action":
+            action_id = self._safe_str(params.get("action_id"), "")
+            return f"hwp.Run({action_id.__repr__()})"
+        if action == "execute_action":
+            action_id = self._safe_str(params.get("action_id"), "")
+            pset_name = self._safe_str(params.get("pset_name"), "")
+            values = params.get("values", {}) or {}
+            lines = [
+                f"pset = hwp.HParameterSet.{pset_name}",
+                f'hwp.HAction.GetDefault({action_id.__repr__()}, pset.HSet)',
+            ]
+            for key, value in values.items():
+                lines.append(f"pset.{key} = {value!r}")
+            lines.append(f'hwp.HAction.Execute({action_id.__repr__()}, pset.HSet)')
+            return " ; ".join(lines)
         if action == "open_file":
             return f"hwp.open({self._safe_str(params.get('path'), '').__repr__()})"
         if action == "save_file":
@@ -213,6 +230,9 @@ class MacroRecorder:
     사용자 조작을 기록하고 재생
     """
     
+    _global_recording: bool = False
+    _global_actions: list[MacroAction] = []
+
     def __init__(self, base_dir: Optional[str] = None) -> None:
         self._logger = logging.getLogger(__name__)
         
@@ -253,17 +273,25 @@ class MacroRecorder:
     
     @property
     def is_recording(self) -> bool:
-        return self._recording
+        return self.__class__._global_recording
+
+    @property
+    def recorded_action_count(self) -> int:
+        return len(self.__class__._global_actions)
     
     def start_recording(self) -> None:
         """녹화 시작"""
+        self.__class__._global_recording = True
+        self.__class__._global_actions = []
         self._recording = True
         self._current_actions = []
     
     def stop_recording(self) -> list[MacroAction]:
         """녹화 중지 및 액션 반환"""
+        self.__class__._global_recording = False
+        actions = self.__class__._global_actions.copy()
+        self.__class__._global_actions = []
         self._recording = False
-        actions = self._current_actions.copy()
         self._current_actions = []
         return actions
     
@@ -274,13 +302,13 @@ class MacroRecorder:
         description: str = ""
     ) -> None:
         """액션 기록"""
-        if self._recording:
+        if self.__class__._global_recording:
             action = MacroAction(
                 action_type=action_type,
                 params=params or {},
                 description=description
             )
-            self._current_actions.append(action)
+            self.__class__._global_actions.append(action)
     
     def save_macro(
         self,
@@ -379,9 +407,25 @@ class MacroRecorder:
         """단일 액션 실행 (pyhwpx 호환)"""
         action_type = action.action_type
         params = action.params
-        
+
         try:
-            if action_type == "open_file":
+            if action_type == "run_action":
+                action_id = str(params.get("action_id", "")).strip()
+                if action_id:
+                    hwp.Run(action_id)
+            elif action_type == "execute_action":
+                action_id = str(params.get("action_id", "")).strip()
+                pset_name = str(params.get("pset_name", "")).strip()
+                values = dict(params.get("values", {}) or {})
+                if action_id and pset_name:
+                    pset = getattr(hwp.HParameterSet, pset_name, None)
+                    if pset is not None:
+                        hwp.HAction.GetDefault(action_id, pset.HSet)
+                        for key, value in values.items():
+                            if hasattr(pset, str(key)):
+                                setattr(pset, str(key), value)
+                        hwp.HAction.Execute(action_id, pset.HSet)
+            elif action_type == "open_file":
                 hwp.open(params.get("path", ""))
             elif action_type == "save_file":
                 hwp.save_as(params.get("path", ""))

@@ -7,6 +7,7 @@ Author: HWP Master
 
 from typing import Optional
 from pathlib import Path
+import tempfile
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -38,6 +39,7 @@ class HyperlinkPage(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.temp_dir: str = ""
+        self._temp_dir_ctx: Optional[tempfile.TemporaryDirectory] = None
         self.worker = None
         self._settings = get_settings_manager()
         self._links: list[tuple[str, object]] = []
@@ -143,9 +145,10 @@ class HyperlinkPage(QWidget):
         self.export_btn.setEnabled(False)
 
         from ...utils.worker import HyperlinkWorker
-        import tempfile
 
-        self.temp_dir = tempfile.mkdtemp()
+        self._cleanup_temp_dir()
+        self._temp_dir_ctx = tempfile.TemporaryDirectory()
+        self.temp_dir = self._temp_dir_ctx.name
         timeout_sec = int(self._settings.get("hyperlink_timeout_sec", 5))
         allowlist = str(self._settings.get("hyperlink_domain_allowlist", ""))
 
@@ -188,6 +191,7 @@ class HyperlinkPage(QWidget):
         self.progress.setVisible(False)
         self.scan_btn.setEnabled(True)
         self.export_btn.setEnabled(True)
+        self._cleanup_temp_dir()
 
         if result.success:
             links = (result.data or {}).get("links", [])
@@ -211,7 +215,22 @@ class HyperlinkPage(QWidget):
             get_toast_manager().error(f"오류: {result.error_message}")
 
     def _on_error(self, message: str) -> None:
+        self._cleanup_temp_dir()
         get_toast_manager().error(f"작업 중 오류 발생: {message}")
+
+    def _cleanup_temp_dir(self) -> None:
+        if self._temp_dir_ctx is not None:
+            try:
+                self._temp_dir_ctx.cleanup()
+            except Exception:
+                pass
+            finally:
+                self._temp_dir_ctx = None
+                self.temp_dir = ""
+
+    def closeEvent(self, event) -> None:
+        self._cleanup_temp_dir()
+        super().closeEvent(event)
 
     def _on_export(self) -> None:
         if self.link_table.rowCount() == 0:

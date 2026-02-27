@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QLabel, QPushButton, QListWidget, QListWidgetItem,
     QFrame, QLineEdit, QTextEdit, QFileDialog,
     QMessageBox, QDialog, QFormLayout, QCheckBox,
-    QSpinBox, QComboBox, QSplitter
+    QSpinBox, QComboBox, QSplitter, QInputDialog
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QColor
@@ -169,6 +169,7 @@ class MacroPage(QWidget):
         
         self._setup_ui()
         self._load_macros()
+        self._sync_recording_ui()
     
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -199,6 +200,16 @@ class MacroPage(QWidget):
         preset_btn.setProperty("class", "secondary")
         preset_btn.clicked.connect(self._add_preset_macro)
         list_header.addWidget(preset_btn)
+
+        self.record_start_btn = QPushButton("녹화 시작")
+        self.record_start_btn.setProperty("class", "secondary")
+        self.record_start_btn.clicked.connect(self._start_recording)
+        list_header.addWidget(self.record_start_btn)
+
+        self.record_stop_btn = QPushButton("녹화 종료/저장")
+        self.record_stop_btn.setProperty("class", "secondary")
+        self.record_stop_btn.clicked.connect(self._stop_recording_and_save)
+        list_header.addWidget(self.record_stop_btn)
         
         new_btn = QPushButton("+ 새 매크로")
         new_btn.clicked.connect(self._create_macro)
@@ -281,6 +292,50 @@ class MacroPage(QWidget):
         splitter.setSizes([300, 500])
         
         layout.addWidget(splitter)
+
+    def _sync_recording_ui(self) -> None:
+        recording = self._recorder.is_recording
+        self.record_start_btn.setEnabled(not recording)
+        self.record_stop_btn.setEnabled(recording)
+
+    def _start_recording(self) -> None:
+        if self._recorder.is_recording:
+            QMessageBox.information(self, "안내", "이미 매크로 녹화 중입니다.")
+            self._sync_recording_ui()
+            return
+        self._recorder.start_recording()
+        self._sync_recording_ui()
+        QMessageBox.information(
+            self,
+            "녹화 시작",
+            "매크로 녹화를 시작했습니다.\nAction Console 실행 명령이 녹화됩니다.",
+        )
+
+    def _stop_recording_and_save(self) -> None:
+        if not self._recorder.is_recording:
+            QMessageBox.information(self, "안내", "현재 진행 중인 녹화가 없습니다.")
+            self._sync_recording_ui()
+            return
+
+        actions = self._recorder.stop_recording()
+        self._sync_recording_ui()
+        if not actions:
+            QMessageBox.information(self, "안내", "기록된 액션이 없습니다.")
+            return
+
+        default_name = "녹화 매크로"
+        name, ok = QInputDialog.getText(self, "매크로 저장", "매크로 이름:", text=default_name)
+        if not ok:
+            return
+        macro_name = str(name).strip() or default_name
+        description = "Action Console 실행 흐름에서 녹화된 매크로"
+
+        try:
+            self._recorder.save_macro(macro_name, actions, description=description)
+            self._load_macros()
+            QMessageBox.information(self, "완료", f"매크로가 저장되었습니다.\n이름: {macro_name}\n액션: {len(actions)}개")
+        except Exception as e:
+            QMessageBox.warning(self, "오류", f"매크로 저장 실패:\n{e}")
 
     def _add_preset_macro(self) -> None:
         presets = self._recorder.get_preset_macros()

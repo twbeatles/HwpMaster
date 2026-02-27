@@ -315,6 +315,24 @@ class DataInjectWorker(BaseWorker):
         return -1
 
     @staticmethod
+    def _count_empty_csv_rows(data_path: Path) -> int:
+        import csv
+
+        for enc in ("utf-8", "cp949"):
+            try:
+                count = 0
+                with open(data_path, "r", encoding=enc, newline="") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        normalized = {str(k): "" if v is None else str(v).strip() for k, v in row.items()}
+                        if normalized and all(v == "" for v in normalized.values()):
+                            count += 1
+                return count
+            except Exception:
+                continue
+        return 0
+
+    @staticmethod
     def _estimate_excel_rows(data_path: Path) -> int:
         try:
             from openpyxl import load_workbook
@@ -342,8 +360,8 @@ class DataInjectWorker(BaseWorker):
                     reader = csv.DictReader(f)
                     for row in reader:
                         normalized = {str(k): "" if v is None else str(v) for k, v in row.items()}
-                        first_value = next(iter(normalized.values()), "") if normalized else ""
-                        if first_value == "":
+                        normalized_values = [str(v).strip() for v in normalized.values()]
+                        if normalized and all(v == "" for v in normalized_values):
                             continue
                         yield normalized
                 return
@@ -370,6 +388,8 @@ class DataInjectWorker(BaseWorker):
 
         success_count = 0
         fail_count = 0
+        skipped_empty_rows = 0
+        filename_collisions = 0
 
         try:
             self.status_changed.emit("?곗씠???뚯씪 ?쎈뒗 以?..");
@@ -388,6 +408,7 @@ class DataInjectWorker(BaseWorker):
 
             if data_path.suffix.lower() == ".csv":
                 total_rows = self._estimate_csv_rows(data_path)
+                skipped_empty_rows = self._count_empty_csv_rows(data_path)
                 row_iter = self._iter_csv_rows(data_path)
             else:
                 total_rows = self._estimate_excel_rows(data_path)
@@ -408,6 +429,7 @@ class DataInjectWorker(BaseWorker):
 
             with com_context(), HwpHandler() as handler:
                 out_dir = ensure_dir(self._output_dir)
+                merge_stats: dict[str, int] = {}
 
                 def progress_cb(current: int, total: int, name: str) -> None:
                     if self.is_cancelled():
@@ -424,11 +446,14 @@ class DataInjectWorker(BaseWorker):
                     filename_template=self._filename_template,
                     progress_callback=progress_cb,
                     total_count=total_rows if total_rows > 0 else None,
+                    stats=merge_stats,
                 ):
                     if r.success:
                         success_count += 1
                     else:
                         fail_count += 1
+
+                filename_collisions = int(merge_stats.get("filename_collisions", 0) or 0)
 
             self.state = WorkerState.FINISHED
             self._emit_finished_once(WorkerResult(
@@ -438,6 +463,8 @@ class DataInjectWorker(BaseWorker):
                     "success_count": success_count,
                     "fail_count": fail_count,
                     "output_dir": out_dir,
+                    "skipped_empty_rows": skipped_empty_rows,
+                    "filename_collisions": filename_collisions,
                 }
             ))
 
@@ -451,6 +478,8 @@ class DataInjectWorker(BaseWorker):
                     "cancelled": True,
                     "success_count": success_count,
                     "fail_count": fail_count,
+                    "skipped_empty_rows": skipped_empty_rows,
+                    "filename_collisions": filename_collisions,
                 },
             ))
 
@@ -464,6 +493,8 @@ class DataInjectWorker(BaseWorker):
                     "cancelled": False,
                     "success_count": success_count,
                     "fail_count": fail_count,
+                    "skipped_empty_rows": skipped_empty_rows,
+                    "filename_collisions": filename_collisions,
                 },
             ))
 
@@ -769,15 +800,17 @@ class BookmarkWorker(BaseWorker):
     
     def __init__(
         self,
-        mode: str, # "delete" or "export"
+        mode: str, # "delete" or "export" or "extract" or "delete_selected"
         files: list[str],
         output_dir: Optional[str] = None, # for delete (optional) or export (required)
+        selected_map: Optional[dict[str, list[str]]] = None,
         parent=None
     ) -> None:
         super().__init__(parent)
         self._mode = mode
         self._files = files
         self._output_dir = output_dir
+        self._selected_map = selected_map or {}
     
     def run(self) -> None:
         from ..core.bookmark_manager import BookmarkManager
@@ -802,7 +835,22 @@ class BookmarkWorker(BaseWorker):
                     success_count = sum(1 for r in results if r.success)
                     fail_count = len(self._files) - success_count
                     data = {"cancelled": False, "success_count": success_count, "fail_count": fail_count, "total": len(self._files)}
-                
+
+                elif self._mode == "delete_selected":
+                    results = manager.batch_delete_selected_bookmarks(
+                        self._selected_map,
+                        self._output_dir,
+                        progress_callback=progress_cb,
+                    )
+                    success_count = sum(1 for r in results if r.success)
+                    fail_count = len(results) - success_count
+                    data = {
+                        "cancelled": False,
+                        "success_count": success_count,
+                        "fail_count": fail_count,
+                        "total": len(results),
+                    }
+                 
                 elif self._mode == "export":
                     if self._output_dir is None:
                         self.state = WorkerState.ERROR
@@ -829,20 +877,30 @@ class BookmarkWorker(BaseWorker):
                         res = manager.get_bookmarks(file_path)
                         results.append(res)
                         if res.success and res.bookmarks:
-                            # UI ?쒖떆瑜??꾪빐 (?뚯씪紐? 遺곷쭏?ъ젙蹂? ?쒗뵆 ???
-                            from pathlib import Path
-                            fname = Path(file_path).name
+                            # UI 표시를 위해 (원본 파일 경로, 북마크정보) 튜플 전달
                             for bm in res.bookmarks:
-                                all_bookmarks.append((fname, bm))
-                    
+                                all_bookmarks.append((str(file_path), bm))
+                     
                     success_count = sum(1 for r in results if r.success)
                     fail_count = len(results) - success_count
                     data = {"cancelled": False, "success_count": success_count, "fail_count": fail_count, "bookmarks": all_bookmarks}
-                
+                 
+            summary_error = None
+            if fail_count > 0:
+                failed_items = [
+                    f"{Path(r.source_path).name}: {r.error_message or 'unknown'}"
+                    for r in results
+                    if not r.success
+                ]
+                summary_error = "; ".join(failed_items[:3])
+                if len(failed_items) > 3:
+                    summary_error += f" (+{len(failed_items) - 3} more)"
+
             self.state = WorkerState.FINISHED
             self._emit_finished_once(WorkerResult(
-                success=True,
-                data=data
+                success=(fail_count == 0),
+                error_message=summary_error,
+                data=data,
             ))
 
             
@@ -1506,16 +1564,22 @@ class ActionConsoleWorker(BaseWorker):
         commands: list[dict[str, Any]],
         *,
         stop_on_error: bool = True,
+        save_mode: str = "new",
+        output_path: str = "",
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._source_file = str(source_file or "")
         self._commands = commands
         self._stop_on_error = bool(stop_on_error)
+        self._save_mode = str(save_mode or "new").strip().lower()
+        self._output_path = str(output_path or "").strip()
 
     def run(self) -> None:
         from ..core.action_runner import ActionRunner, ActionCommand
         from ..core.hwp_handler import HwpHandler
+        from ..core.macro_recorder import MacroRecorder
+        from .settings import get_settings_manager
 
         self.state = WorkerState.RUNNING
         self.status_changed.emit("액션 실행 준비 중...")
@@ -1560,10 +1624,93 @@ class ActionConsoleWorker(BaseWorker):
                     handler=handler,
                 )
 
+                warnings = list(op.warnings or [])
+                artifacts = dict(op.artifacts or {})
+
+                recorder = MacroRecorder()
+                succeeded_commands = list(artifacts.get("succeeded_commands", []) or [])
+                if recorder.is_recording:
+                    for command in succeeded_commands:
+                        action_type = str(command.get("action_type", "run")).strip().lower()
+                        if action_type == "run":
+                            recorder.record_action(
+                                action_type="run_action",
+                                params={
+                                    "action_id": str(command.get("action_id", "")),
+                                },
+                                description=str(command.get("description", "")) or f"Run {command.get('action_id', '')}",
+                            )
+                        elif action_type == "execute":
+                            recorder.record_action(
+                                action_type="execute_action",
+                                params={
+                                    "action_id": str(command.get("action_id", "")),
+                                    "pset_name": str(command.get("pset_name", "")),
+                                    "values": dict(command.get("values", {}) or {}),
+                                },
+                                description=str(command.get("description", "")) or f"Execute {command.get('action_id', '')}",
+                            )
+
+                save_mode = self._save_mode if self._save_mode in ("none", "new", "overwrite") else "new"
+                saved = False
+                saved_path = ""
+                save_error = ""
+
+                if save_mode != "none":
+                    if not self._source_file:
+                        warnings.append("저장 모드가 활성화되었지만 대상 문서가 없어 저장하지 않았습니다.")
+                    else:
+                        try:
+                            hwp = handler._get_hwp()
+                            if save_mode == "overwrite":
+                                saved_path = str(self._source_file)
+                            else:
+                                if self._output_path:
+                                    target = Path(self._output_path)
+                                    target.parent.mkdir(parents=True, exist_ok=True)
+                                    if target.exists():
+                                        ext = target.suffix.lstrip(".")
+                                        saved_path = resolve_output_path(
+                                            str(target.parent),
+                                            str(target),
+                                            new_ext=ext if ext else None,
+                                        )
+                                    else:
+                                        saved_path = str(target)
+                                else:
+                                    settings = get_settings_manager()
+                                    default_output_dir = str(settings.get("default_output_dir", "") or "").strip()
+                                    base_dir = Path(default_output_dir) if default_output_dir else Path(self._source_file).parent
+                                    save_dir = ensure_dir(str(base_dir / "action_console"))
+                                    saved_path = resolve_output_path(
+                                        save_dir,
+                                        self._source_file,
+                                        new_ext="hwp",
+                                        suffix="_edited",
+                                    )
+
+                            hwp.save_as(saved_path)
+                            saved = True
+                        except Exception as e:
+                            save_error = str(e)
+                            warnings.append(f"저장 실패: {e}")
+
+                artifacts["saved"] = saved
+                artifacts["saved_path"] = saved_path
+                artifacts["save_mode"] = save_mode
+                op.warnings = warnings
+                op.artifacts = artifacts
+                if save_error and not op.error:
+                    op.error = save_error
+                if save_error:
+                    op.success = False
+
             self.state = WorkerState.FINISHED if op.success else WorkerState.ERROR
             if not op.success and op.error:
                 self.error_occurred.emit(op.error)
             failed = int(len((op.artifacts or {}).get("failed_commands", [])))
+            if str((op.artifacts or {}).get("save_mode", "")).lower() != "none" and not bool((op.artifacts or {}).get("saved", True)):
+                failed += 1
             success_count = max(0, len(normalized) - failed)
             self._emit_finished_once(WorkerResult(
                 success=op.success,

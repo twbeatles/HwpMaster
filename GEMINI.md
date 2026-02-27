@@ -64,7 +64,7 @@
 ## 🎨 UI 및 프로젝트 구조
 
 ```
-hwp-master/
+HwpMaster/
 ├── main.py                    # 프로그램 진입점
 ├── requirements.txt           # 의존성 패키지 목록
 ├── hwp_master.spec            # PyInstaller 빌드 설정
@@ -187,3 +187,16 @@ from src.ui.pages import StyleCopPage, TableDoctorPage, DocDiffPage, SmartTocPag
 print('All modules OK')
 "
 ```
+
+---
+
+## 📌 운영 정합성 메모 (2026-02-27)
+
+- 최신 회귀 기준:
+  - `pytest -q` => `57 passed, 2 skipped`
+- 매크로 녹화 구현 범위:
+  - `Macro Page`의 녹화 시작/종료 UI + `Action Console` 성공 실행 명령 기록(`run_action`, `execute_action`)
+- 저장 정책 기본값:
+  - Action Console/북마크 삭제 계열은 기본 **원본 보존(새 파일 저장)**, 덮어쓰기는 명시 선택 시만 허용
+- Smart TOC 분석 정책:
+  - form-feed 기반 페이지 추정 + HWPX 스타일 힌트 보조 분석(실패 시 패턴 기반 폴백)

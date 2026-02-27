@@ -34,8 +34,8 @@ HWP Master는 한글(HWP) 문서 작업을 자동화하여 업무 효율을 극�
 
 ```bash
 # 저장소 클론
-git clone https://github.com/google-antigravity/hwp-master.git
-cd hwp-master
+git clone https://github.com/twbeatles/HwpMaster.git
+cd HwpMaster
 
 # 가상환경 생성 (선택)
 python -m venv venv
@@ -73,7 +73,7 @@ pyinstaller hwp_master.spec
 ### 2️⃣ 데이터 자동화 (Data)
 | 기능 | 설명 |
 |------|------|
-| **데이터 주입 (Data Injector)** | 엑셀 데이터(이름, 날짜 등)를 HWP 누름틀에 자동으로 주입하여 대량의 문서를 생성합니다. |
+| **데이터 주입 (Data Injector)** | 엑셀/CSV 데이터를 HWP 누름틀에 자동 주입합니다. 완전 빈 행만 스킵하며, 출력 파일명 충돌 시 자동 suffix(`_1`, `_2`...)를 붙여 원본 덮어쓰기를 방지합니다. |
 | **메타정보 정리** | 문서 작성자, 회사명, 최종 저장 등의 메타데이터를 일괄 삭제하거나 수정합니다. |
 
 ### 3️⃣ 서식 및 스타일 (Style)
@@ -87,10 +87,10 @@ pyinstaller hwp_master.spec
 | 기능 | 설명 |
 |------|------|
 | **템플릿 스토어** | 8종의 내장 양식(휴가계, 지출결의서 등)을 제공하며, **사용자 지정 파일 등록**도 가능합니다. |
-| **매크로 레코더** | 반복 작업을 녹화하여 재사용하거나, '공백 정리', '특수문자 통일' 등 **프리셋 매크로**를 사용할 수 있습니다. |
+| **매크로 레코더** | 수동 매크로 생성/프리셋 실행뿐 아니라, Action Console 실행 흐름을 **녹화 시작/종료**로 기록해 재실행 가능한 매크로로 저장할 수 있습니다. |
 | **정규식 치환** | 주민번호, 전화번호, 이메일 등 민감 정보를 패턴 기반으로 마스킹 처리합니다. |
 | **문서 비교 (Doc Diff)** | 두 문서의 내용을 비교하여 차이점을 상세한 HTML 리포트로 생성합니다. |
-| **스마트 목차 (Smart TOC)** | 문서 내 글자 크기와 굵기를 분석하여 자동으로 목차를 생성합니다. |
+| **스마트 목차 (Smart TOC)** | form-feed(`\\f`) 기반 페이지 분할로 페이지 번호를 추정하고, 가능 시 HWPX 스타일 힌트를 보조 사용해 목차 정확도를 높입니다(실패 시 패턴 기반 자동 폴백). |
 
 ### 5️⃣ 유틸리티 (Utils)
 | 기능 | 설명 |
@@ -98,7 +98,7 @@ pyinstaller hwp_master.spec
 | **워터마크** | 텍스트 또는 이미지 워터마크를 투명도 설정과 함께 일괄 삽입합니다. |
 | **이미지 추출** | 문서 내 포함된 모든 이미지를 원본 화질로 추출합니다. |
 | **링크 검사** | 문서 내 하이퍼링크가 유효한지 검사하고 결과를 엑셀로 내보냅니다. |
-| **북마크 관리** | 북마크 목록을 추출하거나 특정 북마크를 일괄 삭제합니다. |
+| **북마크 관리** | 북마크 추출/내보내기, 전체 삭제, **선택 행만 삭제**를 지원합니다. 삭제 기본값은 새 파일 저장(원본 보존)이며, 명시적으로만 덮어쓰기합니다. |
 
 ---
 
@@ -116,12 +116,18 @@ pyinstaller hwp_master.spec
 3. '공백 정리', '특수문자 통일' 등 원하는 기능 선택
 4. `저장` 후 매크로 목록에서 실행
 
+### 💡 Action Console 실행을 매크로로 녹화하기
+1. 사이드바에서 `🎬 매크로` 메뉴에서 `녹화 시작` 클릭
+2. `🧰 액션 콘솔`에서 JSON 액션 실행
+3. 매크로 페이지로 돌아와 `녹화 종료/저장` 클릭 후 이름 입력
+4. 저장된 매크로를 목록에서 즉시 재실행
+
 ---
 
 ## 📁 프로젝트 구조
 
 ```
-hwp-master/
+HwpMaster/
 ├── main.py                    # 프로그램 진입점
 ├── requirements.txt           # 의존성 패키지 목록
 ├── hwp_master.spec            # PyInstaller 빌드 설정
@@ -193,6 +199,7 @@ hwp-master/
 
 - 코딩 가이드: `CLAUDE.md`
 - 종합 감사 문서: `PROJECT_AUDIT_PYHWPX.md`
+- 기능 구현 감사/개선: `FEATURE_IMPLEMENTATION_AUDIT_2026-02-27.md`
 
 ---
 
@@ -230,3 +237,23 @@ hwp-master/
   - `tests/test_real_hwp_doc_diff_smart_toc.py`
   - 실제 HWP 문서를 생성해 `DocDiff.compare`, `SmartTOC.extract_toc` 검증
   - 기본은 skip, 실행 시 `HWPMASTER_REAL_DOC_TESTS=1` 필요
+
+## 최근 업데이트 (2026-02-27)
+
+- 품질게이트/회귀 안정화
+  - QSS 테스트를 테마 토큰 기반 검증으로 전환
+- 데이터 주입 안정성 강화
+  - CSV 완전 빈 행만 스킵
+  - 출력 파일명 충돌 시 자동 suffix 부여
+  - 결과 데이터에 `skipped_empty_rows`, `filename_collisions` 포함
+- 매크로/북마크 실기능 확장
+  - Action Console 실행 명령 녹화 및 매크로 저장
+  - 북마크 선택 삭제(`delete_selected`) 구현
+- Smart TOC/보안 개선
+  - form-feed 기반 페이지 추정 및 `analysis_mode` 제공
+  - Doc Diff HTML escape 처리 강화
+- 저장 정책 정리(원본 보존 기본)
+  - Action Console: `저장 안 함` / `새 파일 저장(기본)` / `원본 덮어쓰기`
+  - 북마크 삭제: 기본 새 파일 저장, 덮어쓰기는 명시 선택 시만 허용
+- 회귀 테스트
+  - `pytest -q` 기준: `57 passed, 2 skipped`

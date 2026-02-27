@@ -156,6 +156,39 @@ class BookmarkManager:
             return BookmarkResult(True, source_path)
         except Exception as e:
             return BookmarkResult(False, source_path, error_message=str(e))
+
+    def delete_selected_bookmarks(
+        self,
+        source_path: str,
+        bookmark_names: list[str],
+        output_path: Optional[str] = None,
+    ) -> BookmarkResult:
+        """선택한 북마크만 삭제"""
+        try:
+            hwp = self._get_hwp()
+            hwp.open(source_path)
+
+            targets = {str(name).strip() for name in bookmark_names if str(name).strip()}
+            if not targets:
+                return BookmarkResult(False, source_path, error_message="삭제할 북마크가 없습니다.")
+
+            ctrl: Any = hwp.HeadCtrl
+            while ctrl:
+                next_ctrl = ctrl.Next
+                try:
+                    if ctrl.UserDesc == "책갈피":
+                        bm_name = str(ctrl.GetSetItem(0))
+                        if bm_name in targets:
+                            ctrl.Delete()
+                except Exception as e:
+                    self._logger.warning(f"선택 북마크 삭제 실패: {e}")
+                ctrl = next_ctrl
+
+            save_path = output_path or source_path
+            hwp.save_as(save_path)
+            return BookmarkResult(True, source_path)
+        except Exception as e:
+            return BookmarkResult(False, source_path, error_message=str(e))
     
     def export_to_excel(self, source_path: str, excel_path: str) -> BookmarkResult:
         """북마크 목록을 Excel로 내보내기"""
@@ -215,6 +248,47 @@ class BookmarkManager:
                     error_message=str(e)
                 ))
         
+        return results
+
+    def batch_delete_selected_bookmarks(
+        self,
+        selected_map: dict[str, list[str]],
+        output_dir: Optional[str] = None,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+    ) -> list[BookmarkResult]:
+        """파일별 선택 북마크 삭제"""
+        results: list[BookmarkResult] = []
+        source_files = [str(p) for p in selected_map.keys() if str(p).strip()]
+        total = len(source_files)
+
+        try:
+            self._ensure_hwp()
+
+            for idx, source_path in enumerate(source_files):
+                if progress_callback:
+                    progress_callback(idx + 1, total, Path(source_path).name)
+
+                output_path = None
+                if output_dir:
+                    output_path = resolve_output_path(output_dir, source_path)
+
+                result = self.delete_selected_bookmarks(
+                    source_path,
+                    bookmark_names=list(selected_map.get(source_path, []) or []),
+                    output_path=output_path,
+                )
+                results.append(result)
+
+                if (idx + 1) % 50 == 0:
+                    gc.collect()
+        except Exception as e:
+            for remaining in source_files[len(results):]:
+                results.append(BookmarkResult(
+                    success=False,
+                    source_path=remaining,
+                    error_message=str(e),
+                ))
+
         return results
     
     def batch_export_bookmarks(

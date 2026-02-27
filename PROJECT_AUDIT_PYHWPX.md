@@ -7,7 +7,7 @@
 - 언어/런타임: Python 3.9+
 - UI: PySide6
 - HWP 자동화: pyhwpx
-- 테스트 상태: `45 passed, 2 skipped`
+- 테스트 상태: `57 passed, 2 skipped`
 - 이번 반영 범위:
   - Phase 0 즉시 결함 수정
   - `HwpHandler` 공용 액션 API 추가
@@ -148,7 +148,7 @@
 - [x] `capability_mapper.py` 추가
 - [x] 워터마크/헤더푸터/서식/표 설정 필드 best-effort 반영 개선
 - [x] “고급 액션 콘솔” UI + Worker 추가
-- [x] 신규/기존 테스트 통과 (`45 passed, 2 skipped`)
+- [x] 신규/기존 테스트 통과 (`57 passed, 2 skipped`)
 - [x] 보안(암호화/해제) 전용 UI/API 완성 (Phase 1)
 - [x] 메일머지/메타태그 고도화 (Phase 2)
 - [x] 표/도형 고급 속성 정밀 반영 (Phase 3)
@@ -227,7 +227,7 @@
   6. 메일머지 성공/실패 집계 검증
 
 ### 8.4 현재 상태 요약
-- 전체 테스트: `45 passed, 2 skipped`
+- 전체 테스트: `57 passed, 2 skipped`
 - Phase 1: 핵심 API + UI + Worker 반영 완료
 - Phase 2: 필드/메일머지/메타태그 핵심 API와 UI 연동 완료
 - 남은 고도화: pyhwpx 버전별 세부 액션 매핑 확대(문서 비교/도형/표 고급 파라미터)
@@ -251,7 +251,7 @@
   - 기본 환경에서는 skip 처리, 실행 시 `HWPMASTER_REAL_DOC_TESTS=1` 필요
 
 ### 9.3 테스트 상태
-- 전체 테스트: `45 passed, 2 skipped`
+- 전체 테스트: `57 passed, 2 skipped`
 - skip 2건: 실문서 통합 테스트(환경 변수/실행 환경 의존)
 
 ### 9.4 배포 스펙(.spec) 정합성 보강
@@ -259,3 +259,47 @@
   - `importlib` 기반 lazy 페이지 로딩 누락 방지를 위해 `hiddenimports`에 lazy page 모듈 추가
   - Action Console/Capability 매핑 관련 core 모듈 hidden import 추가
   - 배포 문서 동봉을 위해 `PROJECT_AUDIT_PYHWPX.md`를 `datas`에 추가
+
+## 10. 2026-02-27 후속 개선 반영 (Audit Closing)
+
+### 10.1 핵심 이슈 닫힘 상태
+- QSS 테스트 불일치: **해결**
+  - `tests/test_qss_render.py`를 테마 토큰 기반으로 전환
+- 데이터 주입 행 스킵/파일명 충돌: **해결**
+  - CSV 완전 빈 행만 스킵
+  - 파일명 충돌 시 `_1`, `_2` 자동 suffix
+  - 결과 데이터에 `skipped_empty_rows`, `filename_collisions` 추가
+- 매크로 녹화 미구현: **해결**
+  - Action Console 실행 흐름 녹화(`run_action`, `execute_action`) 지원
+  - 매크로 페이지 녹화 시작/종료 UI 반영
+- 북마크 선택 삭제 미구현: **해결**
+  - `delete_selected` worker 모드 + UI 선택행 집계 연동
+- Smart TOC `page=0` 고정: **해결(최소 기준)**
+  - form-feed 기반 페이지 분할 적용
+  - `analysis_mode` 추가, HWPX 스타일 힌트 보조 분석(실패 시 폴백)
+- Action Console 저장 경로 부재: **해결**
+  - 저장 안 함 / 새 파일 저장(기본) / 원본 덮어쓰기 모드 추가
+  - 실행 결과 artifacts에 `saved`, `saved_path`, `save_mode` 포함
+- BookmarkWorker 성공 판정 고정: **해결**
+  - `success = (fail_count == 0)` 정책 적용
+- DocDiff HTML 이스케이프 누락: **해결**
+  - 파일명/텍스트 `html.escape` 적용
+- Hyperlink 임시 폴더 누적: **해결**
+  - `TemporaryDirectory` 사용 + finish/error/close cleanup 보장
+- TemplateStore ID 충돌 위험: **해결**
+  - 사용자 템플릿 ID를 `uuid4` 기반으로 전환
+
+### 10.2 테스트 상태 (최신)
+- 전체 테스트: **`57 passed, 2 skipped`**
+- 신규/보강 테스트:
+  - `test_data_inject_worker_csv.py`
+  - `test_smart_toc_paging.py`
+  - `test_doc_diff_html_escape.py`
+  - `test_macro_recorder_action_console.py`
+  - `test_bookmark_worker_policy.py`
+  - `test_action_console_worker_save_policy.py`
+  - `test_template_store_uuid.py`
+
+### 10.3 잔여 제약(의도된 제한)
+- pyhwpx/한글 버전 차이로 스타일 힌트 수집은 환경 의존적이며, 실패 시 패턴 기반 폴백
+- 실문서 통합 테스트는 환경 변수(`HWPMASTER_REAL_DOC_TESTS=1`) 기반 선택 실행

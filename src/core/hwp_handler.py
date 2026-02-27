@@ -1352,6 +1352,7 @@ class HwpHandler:
         filename_template: Optional[str] = None,
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
         total_count: Optional[int] = None,
+        stats: Optional[dict[str, int]] = None,
     ) -> Iterator[ConversionResult]:
         """Streaming data-injection API to avoid loading all rows in memory."""
         output_directory = Path(output_dir)
@@ -1362,6 +1363,9 @@ class HwpHandler:
             total = int(total_count) if total_count is not None else len(data_iterable)  # type: ignore[arg-type]
         except Exception:
             total = -1
+
+        if stats is not None:
+            stats.setdefault("filename_collisions", 0)
 
         self._ensure_hwp()
 
@@ -1390,7 +1394,19 @@ class HwpHandler:
             else:
                 output_name = f"{template.stem}_{idx:04d}.hwp"
 
-            output_path = str(output_directory / output_name)
+            output_path_obj = output_directory / output_name
+            if output_path_obj.exists():
+                if stats is not None:
+                    stats["filename_collisions"] = int(stats.get("filename_collisions", 0)) + 1
+                stem = output_path_obj.stem
+                ext = output_path_obj.suffix
+                for suffix_idx in range(1, 10_000):
+                    candidate = output_directory / f"{stem}_{suffix_idx}{ext}"
+                    if not candidate.exists():
+                        output_path_obj = candidate
+                        break
+
+            output_path = str(output_path_obj)
             yield self.inject_data(template_path, data, output_path)
 
             if idx % 100 == 0:

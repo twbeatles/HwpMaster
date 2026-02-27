@@ -13,6 +13,7 @@ from typing import Optional, Any, TypedDict
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from enum import Enum
+from uuid import uuid4
 
 
 class TemplateCategory(Enum):
@@ -238,7 +239,7 @@ class TemplateStore:
             생성된 TemplateInfo
         """
         # 고유 ID 생성
-        template_id = f"user_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        template_id = f"user_{uuid4().hex}"
         
         # 파일 복사
         source = Path(file_path)

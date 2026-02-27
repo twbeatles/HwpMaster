@@ -6,6 +6,7 @@ Author: HWP Master
 """
 
 import difflib
+import html as html_lib
 import logging
 from typing import Optional, Any
 from dataclasses import dataclass, field
@@ -75,11 +76,15 @@ class DiffReport:
     
     def to_html(self) -> str:
         """HTML 리포트 생성"""
+        title = html_lib.escape(str(self.title))
+        generated_at = html_lib.escape(str(self.generated_at))
+        file1_name = html_lib.escape(Path(self.result.file1_path).name)
+        file2_name = html_lib.escape(Path(self.result.file2_path).name)
         html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>{self.title}</title>
+    <title>{title}</title>
     <style>
         body {{ font-family: 'Malgun Gothic', sans-serif; margin: 20px; }}
         .header {{ background: #1a1a2e; color: white; padding: 20px; border-radius: 8px; }}
@@ -99,18 +104,18 @@ class DiffReport:
 <body>
     <div class="header">
         <h1>📄 문서 비교 리포트</h1>
-        <p>생성일: {self.generated_at}</p>
+        <p>생성일: {generated_at}</p>
     </div>
     
     <div class="stats">
         <div class="stat-card">
             <h3>파일 1</h3>
-            <p>{Path(self.result.file1_path).name}</p>
+            <p>{file1_name}</p>
             <p>{self.result.file1_lines}줄</p>
         </div>
         <div class="stat-card">
             <h3>파일 2</h3>
-            <p>{Path(self.result.file2_path).name}</p>
+            <p>{file2_name}</p>
             <p>{self.result.file2_lines}줄</p>
         </div>
         <div class="stat-card added">
@@ -151,8 +156,8 @@ class DiffReport:
         <tr class="{row_class}">
             <td>{change.line_number}</td>
             <td>{change.change_type.value}</td>
-            <td>{change.original_text[:100]}</td>
-            <td>{change.new_text[:100]}</td>
+            <td>{html_lib.escape(change.original_text[:100])}</td>
+            <td>{html_lib.escape(change.new_text[:100])}</td>
         </tr>
 """
         

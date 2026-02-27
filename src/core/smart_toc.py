@@ -6,9 +6,14 @@ Author: HWP Master
 """
 
 import logging
+import os
+import zipfile
+import tempfile
+from pathlib import Path
 from typing import Optional, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
+from xml.etree import ElementTree
 
 
 class HeadingLevel(Enum):
@@ -55,6 +60,7 @@ class TocResult:
     file_path: str
     entries: list[TocEntry] = field(default_factory=list)
     error_message: Optional[str] = None
+    analysis_mode: str = "pattern_only"
     
     @property
     def total_entries(self) -> int:
@@ -155,48 +161,162 @@ class SmartTOC:
                     return TocResult(
                         success=True,
                         file_path=file_path,
-                        entries=[]
+                        entries=[],
+                        analysis_mode="pattern_only",
                     )
-                
-                # 줄별로 분석
-                lines = full_text.split('\n')
-                total_lines = len(lines)
-                
-                for i, line in enumerate(lines):
+
+                page_lines = self._split_text_pages(full_text)
+                style_hints, analysis_mode = self._extract_style_hints_from_hwpx(file_path)
+                total_lines = len(page_lines)
+
+                for idx, (line_number, page_number, line) in enumerate(page_lines, start=1):
                     line = line.strip()
-                    
-                    if progress_callback and i % 50 == 0:
-                        progress_callback(i, total_lines, "스캔 중...")
-                    
+
+                    if progress_callback and idx % 50 == 0:
+                        progress_callback(idx, total_lines, "스캔 중...")
+
                     if not line or len(line) < self._rules["min_text_length"]:
                         continue
-                    
+
                     if len(line) > self._rules["max_text_length"]:
                         continue
-                    
-                    # 패턴 기반 제목 수준 결정
-                    level = self._determine_level(line, 12.0, False)  # 글자 크기 정보 없이 패턴만 사용
-                    
+
+                    font_size, is_bold = style_hints.get(line_number, (12.0, False))
+                    level = self._determine_level(line, font_size, is_bold)
+
                     if level > 0:
                         entries.append(TocEntry(
                             level=level,
                             text=line,
-                            line_number=i + 1,
-                            page=0  # 페이지 정보는 별도 분석 필요
+                            line_number=line_number,
+                            page=page_number,
+                            font_size=float(font_size),
+                            is_bold=bool(is_bold),
                         ))
-                
+
                 return TocResult(
                     success=True,
                     file_path=file_path,
-                    entries=entries
+                    entries=entries,
+                    analysis_mode=analysis_mode,
                 )
                 
         except Exception as e:
             return TocResult(
                 success=False,
                 file_path=file_path,
-                error_message=str(e)
+                error_message=str(e),
+                analysis_mode="pattern_only",
             )
+
+    @staticmethod
+    def _local_name(tag: str) -> str:
+        if "}" in tag:
+            return tag.rsplit("}", 1)[-1]
+        return tag
+
+    def _split_text_pages(self, full_text: str) -> list[tuple[int, int, str]]:
+        normalized = str(full_text or "").replace("\r\n", "\n").replace("\r", "\n")
+        page_blocks = normalized.split("\f")
+        rows: list[tuple[int, int, str]] = []
+        line_number = 0
+
+        for page_number, block in enumerate(page_blocks, start=1):
+            lines = block.split("\n")
+            for line in lines:
+                line_number += 1
+                rows.append((line_number, page_number, line))
+
+        return rows
+
+    def _extract_style_hints_from_hwpx(self, file_path: str) -> tuple[dict[int, tuple[float, bool]], str]:
+        """
+        Best-effort style hint extraction from HWPX.
+        Returns:
+            ({line_number: (font_size, is_bold)}, analysis_mode)
+        """
+        hints: dict[int, tuple[float, bool]] = {}
+        hwpx_path = Path(file_path)
+        temp_hwpx: Optional[Path] = None
+
+        try:
+            if hwpx_path.suffix.lower() != ".hwpx":
+                from .hwp_handler import HwpHandler
+
+                with HwpHandler() as handler:
+                    handler._ensure_hwp()
+                    hwp = handler._hwp
+                    hwp.open(file_path)
+                    fd, tmp_name = tempfile.mkstemp(suffix=".hwpx")
+                    os.close(fd)
+                    Path(tmp_name).unlink(missing_ok=True)
+                    temp_hwpx = Path(tmp_name)
+                    hwp.save_as(str(temp_hwpx), format="HWPX")
+                    hwpx_path = temp_hwpx
+
+            if not hwpx_path.exists() or not zipfile.is_zipfile(hwpx_path):
+                return {}, "pattern_only"
+
+            with zipfile.ZipFile(hwpx_path, "r") as zf:
+                style_ids: set[str] = set()
+                header_name = "Contents/header.xml"
+                if header_name in zf.namelist():
+                    try:
+                        root = ElementTree.fromstring(zf.read(header_name))
+                        for elem in root.iter():
+                            if self._local_name(elem.tag).lower() != "style":
+                                continue
+                            style_id = ""
+                            style_name = ""
+                            for key, value in elem.attrib.items():
+                                lowered = key.lower()
+                                if lowered.endswith("id") and not style_id:
+                                    style_id = str(value)
+                                if "name" in lowered:
+                                    style_name = str(value)
+                            lowered_name = style_name.lower()
+                            if "heading" in lowered_name or "제목" in lowered_name:
+                                if style_id:
+                                    style_ids.add(style_id)
+                    except Exception:
+                        return {}, "pattern_only"
+
+                if not style_ids:
+                    return {}, "pattern_only"
+
+                section_names = sorted(
+                    [n for n in zf.namelist() if n.startswith("Contents/section") and n.endswith(".xml")]
+                )
+                line_idx = 0
+                for name in section_names:
+                    try:
+                        section_root = ElementTree.fromstring(zf.read(name))
+                    except Exception:
+                        continue
+                    for para in section_root.iter():
+                        if self._local_name(para.tag).lower() != "p":
+                            continue
+                        line_idx += 1
+                        style_ref = ""
+                        for key, value in para.attrib.items():
+                            lowered = key.lower()
+                            if "styleidref" in lowered or ("style" in lowered and lowered.endswith("idref")):
+                                style_ref = str(value)
+                                break
+                        if style_ref and style_ref in style_ids:
+                            hints[line_idx] = (16.0, True)
+
+            if hints:
+                return hints, "pattern_plus_style_hint"
+            return {}, "pattern_only"
+        except Exception:
+            return {}, "pattern_only"
+        finally:
+            if temp_hwpx is not None:
+                try:
+                    temp_hwpx.unlink(missing_ok=True)
+                except Exception:
+                    pass
     
     def _determine_level(
         self,
@@ -242,39 +362,27 @@ class SmartTOC:
         """
         텍스트에서 목차 추출 (간단한 버전)
         """
-        import re
-        
         entries: list[TocEntry] = []
-        
-        for i, line in enumerate(text.split('\n')):
+
+        for line_number, page_number, line in self._split_text_pages(text):
             line = line.strip()
             if not line:
                 continue
-            
-            level = 0
-            for pattern in self.HEADING_PATTERNS:
-                if re.match(pattern, line):
-                    if re.match(r"^[1-9]\.", line):
-                        level = 1
-                    elif re.match(r"^[가나다라마바사]+\.", line):
-                        level = 2
-                    elif re.match(r"^[①②③④⑤⑥⑦⑧⑨⑩]", line):
-                        level = 3
-                    else:
-                        level = 2
-                    break
-            
+
+            level = self._determine_level(line, 12.0, False)
             if level > 0:
                 entries.append(TocEntry(
                     level=level,
                     text=line,
-                    line_number=i + 1
+                    line_number=line_number,
+                    page=page_number,
                 ))
-        
+
         return TocResult(
             success=True,
             file_path="text",
-            entries=entries
+            entries=entries,
+            analysis_mode="pattern_only",
         )
     
     def generate_toc_hwp(

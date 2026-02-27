@@ -17,7 +17,10 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHeaderView,
     QFileDialog,
+    QCheckBox,
 )
+from PySide6.QtCore import Qt
+from pathlib import Path
 
 from ..widgets.file_list import FileListWidget
 from ..widgets.progress_card import ProgressCard
@@ -72,6 +75,8 @@ class BookmarkPage(QWidget):
         self.bookmark_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
         self.bookmark_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         self.bookmark_table.setColumnWidth(2, 60)
+        self.bookmark_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.bookmark_table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
         bookmark_layout.addWidget(self.bookmark_table)
 
         table_btn_layout = QHBoxLayout()
@@ -93,6 +98,11 @@ class BookmarkPage(QWidget):
         table_btn_layout.addWidget(self.export_btn)
 
         bookmark_layout.addLayout(table_btn_layout)
+
+        self.overwrite_check = QCheckBox("원본 덮어쓰기")
+        self.overwrite_check.setChecked(False)
+        bookmark_layout.addWidget(self.overwrite_check)
+
         main_layout.addWidget(bookmark_group, 1)
 
         layout.addLayout(main_layout)
@@ -103,10 +113,16 @@ class BookmarkPage(QWidget):
 
         layout.addStretch()
 
-    def _run_worker(self, mode: str, files: list[str], output_dir: Optional[str] = None) -> None:
+    def _run_worker(
+        self,
+        mode: str,
+        files: list[str],
+        output_dir: Optional[str] = None,
+        selected_map: Optional[dict[str, list[str]]] = None,
+    ) -> None:
         from ...utils.worker import BookmarkWorker
 
-        self.worker = BookmarkWorker(mode, files, output_dir)
+        self.worker = BookmarkWorker(mode, files, output_dir, selected_map=selected_map)
         self.progress_card.setVisible(True)
         self.progress_card.reset()
         self.progress_card.set_title("북마크 작업")
@@ -131,6 +147,16 @@ class BookmarkPage(QWidget):
         self.export_btn.setEnabled(False)
         self.delete_all_btn.setEnabled(False)
         self.delete_selected_btn.setEnabled(False)
+
+    def _resolve_delete_output_dir(self) -> Optional[str]:
+        if self.overwrite_check.isChecked():
+            return None
+        output_dir = QFileDialog.getExistingDirectory(
+            self,
+            "삭제 결과 저장 폴더 선택",
+            self._settings.get("default_output_dir", ""),
+        )
+        return output_dir or ""
 
     def _on_extract(self) -> None:
         files = self.file_list.get_files()
@@ -172,17 +198,66 @@ class BookmarkPage(QWidget):
         )
 
         if reply == QMessageBox.StandardButton.Yes:
-            self._run_worker("delete", files)
+            output_dir = self._resolve_delete_output_dir()
+            if output_dir == "":
+                return
+            self._run_worker("delete", files, output_dir=output_dir)
 
     def _on_delete_selected(self) -> None:
-        get_toast_manager().info("현재 버전에서는 파일 단위 전체 삭제만 지원합니다.")
+        selected_rows = sorted({idx.row() for idx in self.bookmark_table.selectedIndexes()})
+        if not selected_rows:
+            get_toast_manager().warning("삭제할 북마크 행을 선택해주세요.")
+            return
+
+        selected_map: dict[str, list[str]] = {}
+        for row in selected_rows:
+            file_item = self.bookmark_table.item(row, 0)
+            name_item = self.bookmark_table.item(row, 1)
+            if file_item is None or name_item is None:
+                continue
+            source_path = str(file_item.data(Qt.ItemDataRole.UserRole) or "").strip()
+            bookmark_name = (name_item.text() if name_item else "").strip()
+            if not source_path or not bookmark_name:
+                continue
+            selected_map.setdefault(source_path, [])
+            if bookmark_name not in selected_map[source_path]:
+                selected_map[source_path].append(bookmark_name)
+
+        if not selected_map:
+            get_toast_manager().warning("선택된 북마크 정보를 해석하지 못했습니다.")
+            return
+
+        from PySide6.QtWidgets import QMessageBox
+
+        target_count = sum(len(v) for v in selected_map.values())
+        reply = QMessageBox.question(
+            self,
+            "선택 삭제 확인",
+            f"선택한 북마크 {target_count}개를 삭제하시겠습니까?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        output_dir = self._resolve_delete_output_dir()
+        if output_dir == "":
+            return
+        self._run_worker(
+            "delete_selected",
+            files=list(selected_map.keys()),
+            output_dir=output_dir,
+            selected_map=selected_map,
+        )
 
     def _populate_bookmark_table(self, bookmarks: list[tuple[str, object]]) -> None:
         self.bookmark_table.setUpdatesEnabled(False)
         self.bookmark_table.setRowCount(len(bookmarks))
 
-        for row, (fname, bm) in enumerate(bookmarks):
-            self.bookmark_table.setItem(row, 0, QTableWidgetItem(str(fname)))
+        for row, (source_path, bm) in enumerate(bookmarks):
+            file_item = QTableWidgetItem(Path(str(source_path)).name)
+            file_item.setData(Qt.ItemDataRole.UserRole, str(source_path))
+            self.bookmark_table.setItem(row, 0, file_item)
             self.bookmark_table.setItem(row, 1, QTableWidgetItem(str(getattr(bm, "name", ""))))
             self.bookmark_table.setItem(row, 2, QTableWidgetItem(str(getattr(bm, "page", ""))))
             self.bookmark_table.setItem(row, 3, QTableWidgetItem(str(getattr(bm, "text_preview", ""))))
@@ -215,6 +290,9 @@ class BookmarkPage(QWidget):
                 get_toast_manager().success(f"{count}개 파일에서 북마크 삭제 완료")
                 if count > 0:
                     self._on_extract()
+            elif mode == "delete_selected":
+                get_toast_manager().success(f"선택 북마크 삭제 완료 (성공 파일: {count}, 실패 파일: {fail})")
+                self._on_extract()
         else:
             self.progress_card.set_error(getattr(result, "error_message", None) or "오류 발생")
             get_toast_manager().error(f"오류: {result.error_message}")

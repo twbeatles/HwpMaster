@@ -70,10 +70,11 @@ class SmartTocPage(QWidget):
         toc_layout = QVBoxLayout(toc_group)
         
         self.toc_tree = QTreeWidget()
-        self.toc_tree.setHeaderLabels(["제목", "수준", "줄"])
+        self.toc_tree.setHeaderLabels(["제목", "수준", "페이지", "줄"])
         self.toc_tree.setColumnWidth(0, 400)
         self.toc_tree.setColumnWidth(1, 60)
-        self.toc_tree.setColumnWidth(2, 60)
+        self.toc_tree.setColumnWidth(2, 70)
+        self.toc_tree.setColumnWidth(3, 60)
         self.toc_tree.setMinimumHeight(300)
         toc_layout.addWidget(self.toc_tree)
         
@@ -173,6 +174,7 @@ class SmartTocPage(QWidget):
             item = QTreeWidgetItem([
                 entry.text,
                 f"H{entry.level}",
+                str(entry.page),
                 str(entry.line_number),
             ])
             self.toc_tree.addTopLevelItem(item)
@@ -180,7 +182,10 @@ class SmartTocPage(QWidget):
         h1 = len(toc_result.get_by_level(1))
         h2 = len(toc_result.get_by_level(2))
         h3 = len(toc_result.get_by_level(3))
-        self.stats_label.setText(f"총 {toc_result.total_entries}개 항목 (H1: {h1}, H2: {h2}, H3: {h3})")
+        mode = str(getattr(toc_result, "analysis_mode", "pattern_only"))
+        self.stats_label.setText(
+            f"총 {toc_result.total_entries}개 항목 (H1: {h1}, H2: {h2}, H3: {h3}) | 분석모드: {mode}"
+        )
 
         self.save_btn.setEnabled(True)
         self.insert_btn.setEnabled(True)

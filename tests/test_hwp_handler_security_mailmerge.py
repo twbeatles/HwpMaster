@@ -56,6 +56,8 @@ class _MailMergeTestHandler(HwpHandler):
 
     def inject_data(self, template_path: str, data: dict[str, str], output_path: str) -> ConversionResult:
         self.saved_outputs.append(output_path)
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(output_path).write_text("ok", encoding="utf-8")
         if data.get("fail") == "1":
             return ConversionResult(success=False, source_path=template_path, error_message="inject failed")
         return ConversionResult(success=True, source_path=template_path, output_path=output_path)
@@ -165,6 +167,28 @@ class TestHwpHandlerSecurityAndMailMerge(unittest.TestCase):
         self.assertEqual(result.artifacts.get("success_count"), 2)
         self.assertEqual(result.artifacts.get("fail_count"), 1)
         self.assertEqual(len(result.artifacts.get("outputs", [])), 2)
+
+    def test_iter_inject_data_avoids_filename_collision(self) -> None:
+        handler = _MailMergeTestHandler()
+        rows = [
+            {"name": "same"},
+            {"name": "same"},
+        ]
+        stats: dict[str, int] = {}
+
+        with tempfile.TemporaryDirectory() as td:
+            list(
+                handler.iter_inject_data(
+                    template_path="template.hwp",
+                    data_iterable=rows,
+                    output_dir=td,
+                    filename_template="{name}",
+                    stats=stats,
+                )
+            )
+            outputs = [Path(p).name for p in handler.saved_outputs]
+            self.assertEqual(outputs, ["same.hwp", "same_1.hwp"])
+            self.assertEqual(int(stats.get("filename_collisions", 0)), 1)
 
 
 if __name__ == "__main__":
