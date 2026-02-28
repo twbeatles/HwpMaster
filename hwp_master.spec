@@ -22,7 +22,7 @@ datas = [
     (str(ROOT / 'assets'), 'assets'),
     (str(ROOT / 'README.md'), '.'),
     (str(ROOT / 'PROJECT_AUDIT_PYHWPX.md'), '.'),
-    (str(ROOT / 'FEATURE_IMPLEMENTATION_AUDIT_2026-02-27.md'), '.'),
+    (str(ROOT / 'FEATURE_IMPLEMENTATION_AUDIT_2026-02-28.md'), '.'),
 ]
 
 # 숨겨진 임포트

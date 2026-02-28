@@ -7,7 +7,8 @@
 - 언어/런타임: Python 3.9+
 - UI: PySide6
 - HWP 자동화: pyhwpx
-- 테스트 상태: `57 passed, 2 skipped`
+- 테스트 상태(2026-02-25 스냅샷): `57 passed, 2 skipped`
+  최신 상태는 섹션 11 참고
 - 이번 반영 범위:
   - Phase 0 즉시 결함 수정
   - `HwpHandler` 공용 액션 API 추가
@@ -148,7 +149,7 @@
 - [x] `capability_mapper.py` 추가
 - [x] 워터마크/헤더푸터/서식/표 설정 필드 best-effort 반영 개선
 - [x] “고급 액션 콘솔” UI + Worker 추가
-- [x] 신규/기존 테스트 통과 (`57 passed, 2 skipped`)
+- [x] 신규/기존 테스트 통과 (`65 passed, 2 skipped`)
 - [x] 보안(암호화/해제) 전용 UI/API 완성 (Phase 1)
 - [x] 메일머지/메타태그 고도화 (Phase 2)
 - [x] 표/도형 고급 속성 정밀 반영 (Phase 3)
@@ -289,7 +290,7 @@
 - TemplateStore ID 충돌 위험: **해결**
   - 사용자 템플릿 ID를 `uuid4` 기반으로 전환
 
-### 10.2 테스트 상태 (최신)
+### 10.2 테스트 상태 (2026-02-27 기준)
 - 전체 테스트: **`57 passed, 2 skipped`**
 - 신규/보강 테스트:
   - `test_data_inject_worker_csv.py`
@@ -303,3 +304,33 @@
 ### 10.3 잔여 제약(의도된 제한)
 - pyhwpx/한글 버전 차이로 스타일 힌트 수집은 환경 의존적이며, 실패 시 패턴 기반 폴백
 - 실문서 통합 테스트는 환경 변수(`HWPMASTER_REAL_DOC_TESTS=1`) 기반 선택 실행
+
+## 11. 2026-02-28 후속 개선 반영 (Feature Audit Closing)
+
+### 11.1 섹션 2 핵심 이슈 반영 결과
+- 매크로 ID 충돌: **해결**
+  - `src/core/macro_recorder.py`에서 `macro_<uuid4hex>` 전략으로 전환
+- Header/Footer·Watermark 성공 판정 고정: **해결**
+  - partial failure 시 `success=False` 반환
+  - 실패 요약을 `error_message`에 포함
+- remove 모드 출력 파일 충돌: **해결**
+  - `resolve_output_path()` 적용으로 basename 충돌 시 `_1`, `_2` 자동 분기
+- Excel 첫 컬럼 빈 값 행 누락: **해결**
+  - 행 전체 빈 값일 때만 스킵하도록 `read_excel`/`read_excel_streaming` 통일
+- Hyperlink 리포트 저장 실패 미집계: **해결**
+  - 리포트 저장 실패를 fail count/최종 실패로 반영
+
+### 11.2 테스트/문서/배포 정합성
+- 신규 테스트 추가:
+  - `tests/test_macro_recorder_id_uniqueness.py`
+  - `tests/test_header_footer_worker_policy.py`
+  - `tests/test_watermark_worker_policy.py`
+  - `tests/test_excel_handler_blank_first_cell.py`
+  - `tests/test_hyperlink_worker_report_save_policy.py`
+- 최신 전체 테스트:
+  - `pytest -q` 기준 **`65 passed, 2 skipped`**
+- 문서 정합성:
+  - `README.md` 감사 문서 링크와 최신 업데이트 반영
+  - `CLAUDE.md`, `GEMINI.md` 운영 정합성 메모를 최신 회귀 기준으로 갱신
+- 배포 스펙 정합성:
+  - `hwp_master.spec`의 동봉 문서 경로를 `FEATURE_IMPLEMENTATION_AUDIT_2026-02-28.md`로 수정

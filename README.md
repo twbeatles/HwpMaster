@@ -199,7 +199,7 @@ HwpMaster/
 
 - 코딩 가이드: `CLAUDE.md`
 - 종합 감사 문서: `PROJECT_AUDIT_PYHWPX.md`
-- 기능 구현 감사/개선: `FEATURE_IMPLEMENTATION_AUDIT_2026-02-27.md`
+- 기능 구현 감사/개선: `FEATURE_IMPLEMENTATION_AUDIT_2026-02-28.md`
 
 ---
 
@@ -255,5 +255,16 @@ HwpMaster/
 - 저장 정책 정리(원본 보존 기본)
   - Action Console: `저장 안 함` / `새 파일 저장(기본)` / `원본 덮어쓰기`
   - 북마크 삭제: 기본 새 파일 저장, 덮어쓰기는 명시 선택 시만 허용
+- 회귀 테스트(2026-02-27 기준)
+  - `pytest -q`: `57 passed, 2 skipped`
+
+## 최근 업데이트 (2026-02-28)
+
+- 기능 구현 감사(섹션 2) 반영 완료
+  - 매크로 저장 ID를 `macro_<uuid4hex>`로 전환하여 동시 저장 충돌 제거
+  - Header/Footer, Watermark Worker의 partial failure를 `success=False`로 정정
+  - remove 모드 출력 경로를 `resolve_output_path()`로 통일해 basename 충돌 회피
+  - Excel 행 스킵 정책을 "행 전체가 빈 값일 때만 스킵"으로 통일
+  - Hyperlink 리포트 저장 실패를 실패 카운트/최종 실패로 반영
 - 회귀 테스트
-  - `pytest -q` 기준: `57 passed, 2 skipped`
+  - `pytest -q`: `65 passed, 2 skipped`

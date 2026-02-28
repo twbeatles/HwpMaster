@@ -170,10 +170,10 @@ python main.py
 
 ---
 
-## 📌 운영 정합성 메모 (2026-02-27)
+## 📌 운영 정합성 메모 (2026-02-28)
 
 - 회귀 기준:
-  - `pytest -q` 결과 `57 passed, 2 skipped`
+  - `pytest -q` 결과 `65 passed, 2 skipped`
 - 전역 상태 원칙 예외:
   - 일반적으로 전역 상태는 금지하되, 매크로 녹화는 `Action Console`과 `Macro Page` 간 세션 공유를 위해
     `MacroRecorder`의 글로벌 녹화 상태를 사용함

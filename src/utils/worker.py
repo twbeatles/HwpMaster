@@ -38,6 +38,27 @@ def make_summary_data(
     return data
 
 
+def _build_failed_summary(results: list[Any], *, max_items: int = 3) -> Optional[str]:
+    failed_items: list[str] = []
+    for item in results:
+        if bool(getattr(item, "success", False)):
+            continue
+        source_path = str(getattr(item, "source_path", "") or "").strip()
+        source_name = Path(source_path).name if source_path else "(unknown)"
+        error_message = str(getattr(item, "error_message", "") or "unknown")
+        failed_items.append(f"{source_name}: {error_message}")
+
+    if not failed_items:
+        return None
+
+    limit = max(1, int(max_items))
+    summary = "; ".join(failed_items[:limit])
+    remain = len(failed_items) - limit
+    if remain > 0:
+        summary += f" (+{remain} more)"
+    return summary
+
+
 class WorkerState(Enum):
     """?묒뾽???곹깭"""
     IDLE = "idle"
@@ -956,6 +977,8 @@ class HyperlinkWorker(BaseWorker):
         fail_count = 0
         total_links = 0
         all_links = []
+        report_fail_count = 0
+        warnings: list[str] = []
 
         try:
             with com_context(), HyperlinkChecker(
@@ -979,6 +1002,8 @@ class HyperlinkWorker(BaseWorker):
                                 "fail_count": fail_count,
                                 "total_links": total_links,
                                 "links": all_links,
+                                "report_fail_count": report_fail_count,
+                                "warnings": warnings,
                             },
                         ))
                         return
@@ -990,11 +1015,17 @@ class HyperlinkWorker(BaseWorker):
                     result = checker.check_links(file_path)
 
                     if result.success:
+                        report_saved = True
                         if self._output_dir:
                             report_path = resolve_output_path(self._output_dir, file_path, new_ext="html", suffix="_report")
-                            checker.generate_report(result, report_path)
+                            report_saved = bool(checker.generate_report(result, report_path))
+                            if not report_saved:
+                                report_fail_count += 1
+                                fail_count += 1
+                                warnings.append(f"{filename}: 리포트 저장 실패 ({report_path})")
 
-                        success_count += 1
+                        if report_saved:
+                            success_count += 1
                         total_links += len(result.links)
                         for link in result.links:
                             all_links.append((filename, link))
@@ -1010,6 +1041,8 @@ class HyperlinkWorker(BaseWorker):
                     "fail_count": fail_count,
                     "total_links": total_links,
                     "links": all_links,
+                    "report_fail_count": report_fail_count,
+                    "warnings": warnings,
                 }
             ))
 
@@ -1025,6 +1058,8 @@ class HyperlinkWorker(BaseWorker):
                     "fail_count": fail_count,
                     "total_links": total_links,
                     "links": all_links,
+                    "report_fail_count": report_fail_count,
+                    "warnings": warnings,
                 },
             ))
 
@@ -1079,18 +1114,19 @@ class HeaderFooterWorker(BaseWorker):
                     total = len(self._files)
                     for idx, file_path in enumerate(self._files, start=1):
                         progress_cb(idx, total, file_path)
-                        from pathlib import Path
                         out_path = None
                         if self._output_dir:
-                            out_path = str(Path(self._output_dir) / Path(file_path).name)
+                            out_path = resolve_output_path(self._output_dir, file_path)
                         results.append(manager.remove_header_footer(file_path, out_path))
-                
+
                 success_count = sum(1 for r in results if r.success)
                 fail_count = len(results) - success_count
-                
+                summary_error = _build_failed_summary(results)
+
             self.state = WorkerState.FINISHED
             self._emit_finished_once(WorkerResult(
-                success=True,
+                success=(fail_count == 0),
+                error_message=summary_error,
                 data={"cancelled": False, "success_count": success_count, "fail_count": fail_count, "total": len(self._files)}
             ))
             
@@ -1163,18 +1199,19 @@ class WatermarkWorker(BaseWorker):
                     total = len(self._files)
                     for idx, file_path in enumerate(self._files, start=1):
                         progress_cb(idx, total, file_path)
-                        from pathlib import Path
                         out_path = None
                         if self._output_dir:
-                            out_path = str(Path(self._output_dir) / Path(file_path).name)
+                            out_path = resolve_output_path(self._output_dir, file_path)
                         results.append(manager.remove_watermark(file_path, out_path))
-                
+
                 success_count = sum(1 for r in results if r.success)
                 fail_count = len(results) - success_count
-                
+                summary_error = _build_failed_summary(results)
+
             self.state = WorkerState.FINISHED
             self._emit_finished_once(WorkerResult(
-                success=True,
+                success=(fail_count == 0),
+                error_message=summary_error,
                 data={"cancelled": False, "success_count": success_count, "fail_count": fail_count, "total": len(self._files)}
             ))
             

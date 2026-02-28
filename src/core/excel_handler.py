@@ -30,6 +30,22 @@ class ExcelHandler:
     openpyxl 기반 엑셀 데이터 처리 클래스
     Pandas 없이 list[dict] 형태로 데이터 반환
     """
+
+    @staticmethod
+    def _is_row_effectively_empty(row: tuple[Any, ...]) -> bool:
+        """모든 셀이 비어 있는 행인지 판정."""
+        if not row:
+            return True
+        for cell in row:
+            value = getattr(cell, "value", None)
+            if value is None:
+                continue
+            if isinstance(value, str):
+                if value.strip() == "":
+                    continue
+                return False
+            return False
+        return True
     
     @staticmethod
     def read_excel(
@@ -109,9 +125,8 @@ class ExcelHandler:
             row_idx = 0
             
             for row_num, row in enumerate(ws.iter_rows(min_row=data_start, max_row=end_row), start=data_start):
-                # 빈 행 감지 (첫 번째 셀이 비어있으면 스킵)
-                first_cell_value = row[0].value if row else None
-                if first_cell_value is None:
+                # 빈 행 감지 (모든 셀이 빈 값인 경우만 스킵)
+                if ExcelHandler._is_row_effectively_empty(row):
                     continue
                 
                 row_data: dict[str, Any] = {}
@@ -198,8 +213,7 @@ class ExcelHandler:
             chunk: list[dict[str, Any]] = []
 
             for row in ws.iter_rows(min_row=header_row + 1):
-                first_cell_value = row[0].value if row else None
-                if first_cell_value is None:
+                if ExcelHandler._is_row_effectively_empty(row):
                     continue
 
                 row_data: dict[str, Any] = {}

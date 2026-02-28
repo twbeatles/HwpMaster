@@ -12,6 +12,7 @@ from typing import Optional, Any, Callable
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from enum import Enum
+from uuid import uuid4
 
 
 class MacroActionType(Enum):
@@ -317,7 +318,7 @@ class MacroRecorder:
         description: str = ""
     ) -> MacroInfo:
         """매크로 저장"""
-        macro_id = f"macro_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        macro_id = f"macro_{uuid4().hex}"
         
         macro = MacroInfo(
             id=macro_id,
