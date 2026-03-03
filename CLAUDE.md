@@ -179,3 +179,14 @@ python main.py
     `MacroRecorder`의 글로벌 녹화 상태를 사용함
 - 저장 정책 기본값:
   - 신규/편집성 기능은 기본적으로 **원본 보존(새 파일 저장)**을 사용하고, 덮어쓰기는 명시 선택 시에만 허용
+
+## 📌 운영 정합성 메모 (2026-03-03)
+
+- 최신 회귀 기준:
+  - `pytest -q` 결과 `72 passed, 2 skipped`
+- 최근 안정화 반영:
+  - Header/Footer, Watermark Worker 성공 판정 정합성 보강
+  - remove 모드 출력 경로 충돌 회피(`resolve_output_path` 통일)
+  - 이미지 추출 파일별 하위폴더 정책 고정
+  - DocDiff fallback 임시파일 `try/finally` 정리 보장
+  - 매크로 ID 고유성 강화(마이크로초 + 충돌 fallback)

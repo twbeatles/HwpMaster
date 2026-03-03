@@ -12,7 +12,6 @@ from typing import Optional, Any, Callable
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from enum import Enum
-from uuid import uuid4
 
 
 class MacroActionType(Enum):
@@ -318,7 +317,7 @@ class MacroRecorder:
         description: str = ""
     ) -> MacroInfo:
         """매크로 저장"""
-        macro_id = f"macro_{uuid4().hex}"
+        macro_id = self._generate_unique_macro_id()
         
         macro = MacroInfo(
             id=macro_id,
@@ -336,6 +335,23 @@ class MacroRecorder:
             f.write(macro.to_python_script())
         
         return macro
+
+    def _generate_unique_macro_id(self) -> str:
+        """충돌 없는 매크로 ID 생성."""
+        for _ in range(32):
+            candidate = f"macro_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+            script_path = self._base_dir / f"{candidate}.py"
+            if candidate not in self._macros and not script_path.exists():
+                return candidate
+
+        # Extremely unlikely fallback when timestamp resolution is insufficient.
+        from uuid import uuid4
+
+        while True:
+            candidate = f"macro_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{uuid4().hex[:8]}"
+            script_path = self._base_dir / f"{candidate}.py"
+            if candidate not in self._macros and not script_path.exists():
+                return candidate
     
     def get_all_macros(self) -> list[MacroInfo]:
         """모든 매크로 목록"""

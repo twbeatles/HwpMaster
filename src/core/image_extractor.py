@@ -307,7 +307,8 @@ class ImageExtractor:
         self,
         source_files: list[str],
         output_dir: str,
-        progress_callback: Optional[Callable[[int, int, str], None]] = None
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        prefix: str = "",
     ) -> list[ExtractResult]:
         """일괄 이미지 추출"""
         results: list[ExtractResult] = []
@@ -333,7 +334,11 @@ class ImageExtractor:
                             file_output_dir = cand
                             break
                 
-                result = self.extract_images(source_path, str(file_output_dir))
+                result = self.extract_images(
+                    source_path,
+                    str(file_output_dir),
+                    prefix=prefix,
+                )
                 results.append(result)
                 
                 if (idx + 1) % 20 == 0:

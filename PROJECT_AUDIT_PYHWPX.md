@@ -3,6 +3,18 @@
 작성일: 2026-02-25  
 기준 환경: Windows + 한글(HWP) 설치 환경, `pyhwpx 1.6.6`
 
+## 0. 운영 정합성 업데이트 (2026-03-03)
+- 최신 회귀 기준: `pytest -q` => `72 passed, 2 skipped`
+- 최신 구현 감사 문서: `FEATURE_IMPLEMENTATION_AUDIT_2026-03-03.md`
+- 2026-03-03 반영 핵심:
+  - Header/Footer, Watermark Worker 성공 판정 정합성 보강
+  - remove 모드 출력 충돌 회피(`resolve_output_path` 통일)
+  - 이미지 추출 파일별 하위폴더 정책 고정
+  - DocDiff fallback 임시파일 정리 보장
+  - 매크로 ID 고유성 강화
+- 참고:
+  - 본 문서의 `57 passed, 2 skipped` 표기는 2026-02-25 기준 스냅샷(히스토리)입니다.
+
 ## 1. 프로젝트 스냅샷
 - 언어/런타임: Python 3.9+
 - UI: PySide6

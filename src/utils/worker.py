@@ -773,12 +773,16 @@ class ImageExtractWorker(BaseWorker):
                     filename = Path(file_path).name
                     self.progress.emit(idx, total, filename)
                     self.status_changed.emit(f"異붿텧 以? {filename}")
-                    
-                    result = extractor.extract_images(
-                        file_path, 
-                        self._output_dir, 
-                        self._prefix
+
+                    batch_results = extractor.batch_extract(
+                        [file_path],
+                        self._output_dir,
+                        prefix=self._prefix,
                     )
+                    if not batch_results:
+                        fail_count += 1
+                        continue
+                    result = batch_results[0]
                     
                     if result.success:
                         success_count += 1
@@ -1118,11 +1122,9 @@ class HeaderFooterWorker(BaseWorker):
                         if self._output_dir:
                             out_path = resolve_output_path(self._output_dir, file_path)
                         results.append(manager.remove_header_footer(file_path, out_path))
-
                 success_count = sum(1 for r in results if r.success)
                 fail_count = len(results) - success_count
                 summary_error = _build_failed_summary(results)
-
             self.state = WorkerState.FINISHED
             self._emit_finished_once(WorkerResult(
                 success=(fail_count == 0),
@@ -1203,11 +1205,9 @@ class WatermarkWorker(BaseWorker):
                         if self._output_dir:
                             out_path = resolve_output_path(self._output_dir, file_path)
                         results.append(manager.remove_watermark(file_path, out_path))
-
                 success_count = sum(1 for r in results if r.success)
                 fail_count = len(results) - success_count
                 summary_error = _build_failed_summary(results)
-
             self.state = WorkerState.FINISHED
             self._emit_finished_once(WorkerResult(
                 success=(fail_count == 0),

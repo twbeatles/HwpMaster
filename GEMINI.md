@@ -200,3 +200,14 @@ print('All modules OK')
   - Action Console/북마크 삭제 계열은 기본 **원본 보존(새 파일 저장)**, 덮어쓰기는 명시 선택 시만 허용
 - Smart TOC 분석 정책:
   - form-feed 기반 페이지 추정 + HWPX 스타일 힌트 보조 분석(실패 시 패턴 기반 폴백)
+
+## 📌 운영 정합성 메모 (2026-03-03)
+
+- 최신 회귀 기준:
+  - `pytest -q` => `72 passed, 2 skipped`
+- 안정화 업데이트:
+  - Header/Footer, Watermark Worker 성공 판정 로직을 fail_count 기준으로 정합화
+  - remove 모드 출력 충돌 회피 로직 통일(`resolve_output_path`)
+  - 이미지 추출을 파일별 하위폴더 정책으로 고정(`batch_extract` 경유)
+  - DocDiff fallback 임시 파일 정리 보장(`try/finally`)
+  - 매크로 ID 충돌 방지(마이크로초 + fallback)

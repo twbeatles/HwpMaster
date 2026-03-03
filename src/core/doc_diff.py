@@ -250,15 +250,18 @@ class DocDiff:
                 else:
                     # 대체 방법: 텍스트 파일로 변환 후 읽기
                     import tempfile
+                    tmp_path = ""
                     with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as tmp:
                         tmp_path = tmp.name
-                    
-                    hwp.save_as(tmp_path, format="TEXT")
-                    
-                    with open(tmp_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        lines = f.read().split('\n')
-                    
-                    Path(tmp_path).unlink(missing_ok=True)
+
+                    try:
+                        hwp.save_as(tmp_path, format="TEXT")
+
+                        with open(tmp_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            lines = f.read().split('\n')
+                    finally:
+                        if tmp_path:
+                            Path(tmp_path).unlink(missing_ok=True)
                     
         except Exception as e:
             self._logger.error(f"텍스트 추출 오류: {e}")

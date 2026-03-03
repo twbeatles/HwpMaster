@@ -199,7 +199,7 @@ HwpMaster/
 
 - 코딩 가이드: `CLAUDE.md`
 - 종합 감사 문서: `PROJECT_AUDIT_PYHWPX.md`
-- 기능 구현 감사/개선: `FEATURE_IMPLEMENTATION_AUDIT_2026-02-28.md`
+- 기능 구현 감사/개선: `FEATURE_IMPLEMENTATION_AUDIT_2026-03-03.md`
 
 ---
 
@@ -268,3 +268,28 @@ HwpMaster/
   - Hyperlink 리포트 저장 실패를 실패 카운트/최종 실패로 반영
 - 회귀 테스트
   - `pytest -q`: `65 passed, 2 skipped`
+
+## 최근 업데이트 (2026-03-03)
+
+- Worker 결과 정합성 개선
+  - `HeaderFooterWorker`, `WatermarkWorker`의 성공/실패 판정을 실제 `fail_count` 기반으로 수정
+  - 부분 실패 시 실패 파일 요약 메시지 제공
+- remove 모드 출력 충돌 회피 강화
+  - 헤더/푸터, 워터마크 remove 처리에서 `resolve_output_path(...)`를 사용해 동명 파일 충돌 방지
+- 이미지 추출 출력 정책 안정화
+  - `ImageExtractWorker`가 `batch_extract` 기반으로 동작하도록 변경
+  - 문서별 하위 폴더 출력 정책을 기본 적용해 동명 문서/재실행 충돌 방지
+- Doc Diff 임시 파일 정리 보강
+  - TEXT fallback 경로를 `try/finally`로 보호해 예외 발생 시에도 임시 파일 삭제 보장
+- 매크로 저장 충돌 방지
+  - 매크로 ID를 마이크로초 단위(`macro_YYYYmmddHHMMSSffffff`)로 생성
+  - ID/스크립트 파일 충돌 시 재생성(fallback) 로직 추가
+- 회귀/추가 테스트 보강
+  - 신규 테스트 추가:
+    - `tests/test_header_footer_worker_result_policy.py`
+    - `tests/test_watermark_worker_result_policy.py`
+    - `tests/test_remove_mode_output_collision.py`
+    - `tests/test_image_extractor_output_collision.py`
+    - `tests/test_doc_diff_tempfile_cleanup.py`
+    - `tests/test_macro_recorder_id_uniqueness.py`
+  - `pytest -q` 기준: `72 passed, 2 skipped`

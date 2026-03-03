@@ -20,10 +20,20 @@ ROOT = Path(SPECPATH)
 # 데이터 파일
 datas = [
     (str(ROOT / 'assets'), 'assets'),
-    (str(ROOT / 'README.md'), '.'),
-    (str(ROOT / 'PROJECT_AUDIT_PYHWPX.md'), '.'),
-    (str(ROOT / 'FEATURE_IMPLEMENTATION_AUDIT_2026-02-28.md'), '.'),
 ]
+
+doc_files = [
+    'README.md',
+    'PROJECT_AUDIT_PYHWPX.md',
+    'FEATURE_IMPLEMENTATION_AUDIT_2026-03-03.md',
+    'CLAUDE.md',
+    'GEMINI.md',
+]
+
+for doc_name in doc_files:
+    doc_path = ROOT / doc_name
+    if doc_path.exists():
+        datas.append((str(doc_path), '.'))
 
 # 숨겨진 임포트
 hiddenimports = [
