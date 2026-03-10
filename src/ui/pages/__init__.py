@@ -8,7 +8,28 @@ but avoids importing every page module at startup.
 from __future__ import annotations
 
 import importlib
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .action_console_page import ActionConsolePage
+    from .bookmark_page import BookmarkPage
+    from .convert_page import ConvertPage
+    from .data_inject_page import DataInjectPage
+    from .doc_diff_page import DocDiffPage
+    from .header_footer_page import HeaderFooterPage
+    from .home_page import HomePage
+    from .hyperlink_page import HyperlinkPage
+    from .image_extractor_page import ImageExtractorPage
+    from .macro_page import MacroPage
+    from .merge_split_page import MergeSplitPage
+    from .metadata_page import MetadataPage
+    from .regex_page import RegexPage
+    from .settings_page import SettingsPage
+    from .smart_toc_page import SmartTocPage
+    from .style_cop_page import StyleCopPage
+    from .table_doctor_page import TableDoctorPage
+    from .template_page import TemplatePage
+    from .watermark_page import WatermarkPage
 
 
 _PAGE_MODULES: dict[str, str] = {
@@ -33,7 +54,27 @@ _PAGE_MODULES: dict[str, str] = {
     "ActionConsolePage": ".action_console_page",
 }
 
-__all__ = list(_PAGE_MODULES.keys())
+__all__ = (
+    "HomePage",
+    "ConvertPage",
+    "MergeSplitPage",
+    "DataInjectPage",
+    "MetadataPage",
+    "SettingsPage",
+    "TemplatePage",
+    "MacroPage",
+    "RegexPage",
+    "StyleCopPage",
+    "TableDoctorPage",
+    "DocDiffPage",
+    "SmartTocPage",
+    "WatermarkPage",
+    "HeaderFooterPage",
+    "BookmarkPage",
+    "HyperlinkPage",
+    "ImageExtractorPage",
+    "ActionConsolePage",
+)
 
 
 def __getattr__(name: str) -> Any:
@@ -48,4 +89,4 @@ def __getattr__(name: str) -> Any:
 
 
 def __dir__() -> list[str]:
-    return sorted(list(globals().keys()) + __all__)
+    return sorted(list(globals().keys()) + list(__all__))

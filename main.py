@@ -6,13 +6,12 @@ Author: HWP Master
 """
 
 import sys
-import os
 import logging
 from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt, QFile, QTextStream
-from PySide6.QtGui import QFont, QFontDatabase
+from PySide6.QtGui import QFont
 
 
 def load_stylesheet(app: QApplication) -> None:
@@ -29,10 +28,8 @@ def load_stylesheet(app: QApplication) -> None:
         # fallback to bundled style.qss
         logging.getLogger(__name__).warning(f"테마 QSS 적용 실패, 기본 QSS로 fallback: {e}")
 
-    if getattr(sys, "frozen", False):
-        base_path = Path(sys._MEIPASS)
-    else:
-        base_path = Path(__file__).parent
+    bundle_dir = getattr(sys, "_MEIPASS", None) if getattr(sys, "frozen", False) else None
+    base_path = Path(bundle_dir) if bundle_dir else Path(__file__).parent
 
     style_path = base_path / "assets" / "styles" / "style.qss"
 
@@ -71,7 +68,7 @@ def main() -> int:
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
-    
+
     # 애플리케이션 생성
     app = QApplication(sys.argv)
     from src.utils.version import APP_NAME, APP_VERSION
@@ -79,34 +76,34 @@ def main() -> int:
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(APP_VERSION)
     app.setOrganizationName(APP_NAME)
-    
+
     # 기본 폰트 설정
     default_font = QFont("Segoe UI", 10)
     default_font.setStyleHint(QFont.StyleHint.SansSerif)
     app.setFont(default_font)
-    
+
     # 스타일시트 로드
     load_stylesheet(app)
-    
+
     # 폰트 설정
     setup_fonts()
-    
+
     # 메인 윈도우 생성 및 표시
     from src.ui.main_window import MainWindow
-    
+
     window = MainWindow()
     window.show()
-    
+
     # 로거 설정
     from src.utils.logger import setup_logger
     logger = setup_logger()
     logger.info("HWP Master 시작")
-    
+
     # 애플리케이션 실행
     exit_code = app.exec()
-    
+
     logger.info("HWP Master 종료")
-    
+
     return exit_code
 
 

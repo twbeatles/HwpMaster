@@ -2,212 +2,115 @@
 
 ## 🎯 프로젝트 목적
 
-**HWP Master**는 pyhwpx 기반 경량 HWP 업무 자동화 도구입니다.  
-공공기관/기업의 HWP 문서 작업을 자동화하여 업무 효율성을 높입니다.
+**HWP Master**는 pyhwpx 기반 경량 HWP 업무 자동화 도구입니다.
+공공기관/기업의 HWP 문서 작업을 자동화하면서도, 무거운 데이터 처리 스택 없이 Windows 데스크톱 환경에서 안정적으로 동작하는 것을 목표로 합니다.
 
 ---
 
-## 🏗️ 기술 스택
+## 🏗️ 기술 스택 / 기준 버전
 
 | 카테고리 | 기술 | 비고 |
 |----------|------|------|
-| GUI | PySide6 | Qt 바인딩 |
-| HWP 제어 | pyhwpx | 한글 COM 래퍼 |
-| Excel | openpyxl | Pandas 대체 |
-| 스타일 | QSS | 다크모드 |
+| Runtime | Python 3.10+ | `pyrightconfig.json` 기준 |
+| GUI | PySide6 >= 6.6.0 | Qt 바인딩 |
+| HWP 제어 | pyhwpx >= 0.5.0 | 한글 COM 래퍼 |
+| Excel | openpyxl >= 3.1.0 | Pandas 대체 |
+| 정적 분석 | Pyright / Pylance | `pyright .` clean 유지 |
+| 텍스트 규칙 | `.editorconfig` | UTF-8 / LF 고정 |
 
 ---
 
 ## 📂 핵심 파일
 
+### 루트
+- `main.py` - 앱 진입점, 스타일시트/폰트/메인 윈도우 초기화
+- `hwp_master.spec` - PyInstaller 빌드 설정
+- `pyrightconfig.json` - 정적 분석 범위와 Python 버전 기준
+- `.editorconfig` - 인코딩/줄바꿈/들여쓰기 기준
+- `scripts/verify_core_modules.py` - 핵심 모듈 임포트 검증
+- `scripts/perf_smoke.py` - 수동 성능 스모크 테스트
+
 ### 코어 모듈 (`src/core/`)
-- `hwp_handler.py` - HWP 파일 조작 (변환, 병합, 분할)
-- `action_runner.py` - 범용 Run/Execute 액션 실행 및 프리셋
-- `capability_mapper.py` - pyhwpx 기능 커버리지 매핑
-- `excel_handler.py` - Excel/CSV 읽기/쓰기
-- `template_store.py` - 내장 템플릿 관리
-- `macro_recorder.py` - 매크로 기록/재생
-- `regex_replacer.py` - 정규식 치환 (11종 프리셋)
-- `style_cop.py` - 서식 통일 (4종 프리셋)
-- `table_doctor.py` - 표 스타일 수정
-- `doc_diff.py` - 문서 비교 (difflib)
-- `smart_toc.py` - 자동 목차 생성
-- `watermark_manager.py` - 워터마크 삽입
-- `header_footer_manager.py` - 헤더/푸터 관리
-- `bookmark_manager.py` - 북마크 관리
-- `hyperlink_checker.py` - 하이퍼링크 검사
-- `image_extractor.py` - 이미지 추출
+- `hwp_handler.py` - HWP 파일 조작, 보안/메타데이터/액션 실행 기반
+- `action_runner.py` - 범용 `run_action` / `execute_action` 실행 및 프리셋
+- `hyperlink_checker.py` - 링크 검사와 `LinkInfo` 결과 타입 정의
+- `template_store.py`, `macro_recorder.py` - 템플릿/매크로 저장소
+- `doc_diff.py`, `smart_toc.py` - 비교/목차 생성
+- `watermark_manager.py`, `header_footer_manager.py`, `bookmark_manager.py`, `image_extractor.py`
 
 ### UI 모듈 (`src/ui/`)
-- `main_window.py` - 메인 윈도우 프레임
-- `pages/`
-  - `home_page.py`, `convert_page.py`, `merge_split_page.py`
-  - `data_inject_page.py`, `metadata_page.py`, `settings_page.py`
-  - `template_page.py`, `macro_page.py`, `regex_page.py`
-  - `style_cop_page.py`, `table_doctor_page.py`, `doc_diff_page.py`
-  - `smart_toc_page.py`, `watermark_page.py`, `header_footer_page.py`
-  - `bookmark_page.py`, `hyperlink_page.py`, `image_extractor_page.py`
-- `widgets/`
-  - `file_list.py`, `progress_card.py`, `feature_card.py`
-  - `sidebar_button.py`, `toast.py`, `page_header.py`
-  - `favorites_panel.py`, `history_panel.py`
+- `main_window.py` - 페이지 lazy-loading, 사이드바/스택 구성
+- `pages/` - 기능별 페이지 구현
+- `widgets/` - 재사용 가능한 공통 위젯
 
 ### 유틸리티 (`src/utils/`)
-- `worker.py` - 백그라운드 작업 (QThread)
-- `logger.py` - 로깅 시스템
-- `settings.py` - 설정 관리
-- `theme_manager.py` - 테마 관리
-- `history_manager.py` - 작업 히스토리
-
----
-
-## 🎨 UI 및 프로젝트 구조
-
-```
-HwpMaster/
-├── main.py                    # 프로그램 진입점
-├── requirements.txt           # 의존성 패키지 목록
-├── hwp_master.spec            # PyInstaller 빌드 설정
-├── assets/
-│   └── styles/style.qss       # 다크모드 스타일시트
-├── src/
-│   ├── core/                  # 핵심 비즈니스 로직
-│   │   ├── hwp_handler.py     # HWP 제어 (pyhwpx)
-│   │   ├── action_runner.py   # 범용 액션 실행기
-│   │   ├── capability_mapper.py # pyhwpx 기능 커버리지 매핑
-│   │   ├── excel_handler.py   # Excel 처리 (openpyxl)
-│   │   ├── template_store.py  # 템플릿 관리
-│   │   ├── macro_recorder.py  # 매크로 기록/재생
-│   │   ├── regex_replacer.py  # 정규식 치환
-│   │   ├── style_cop.py       # 서식 교정
-│   │   ├── table_doctor.py    # 표 스타일 수정
-│   │   ├── doc_diff.py        # 문서 비교
-│   │   ├── smart_toc.py       # 목차 생성
-│   │   ├── watermark_manager.py   # 워터마크 관리
-│   │   ├── header_footer_manager.py # 헤더/푸터 관리
-│   │   ├── bookmark_manager.py    # 북마크 관리
-│   │   ├── hyperlink_checker.py   # 링크 검사
-│   │   └── image_extractor.py     # 이미지 추출
-│   ├── ui/                    # 사용자 인터페이스
-│   │   ├── main_window.py     # 메인 윈도우 프레임
-│   │   ├── pages/             # 기능별 페이지
-│   │   │   ├── home_page.py        # 홈 대시보드
-│   │   │   ├── convert_page.py     # 변환
-│   │   │   ├── merge_split_page.py # 병합/분할
-│   │   │   ├── data_inject_page.py # 데이터 주입
-│   │   │   ├── metadata_page.py    # 메타정보
-│   │   │   ├── template_page.py    # 템플릿
-│   │   │   ├── macro_page.py       # 매크로
-│   │   │   ├── regex_page.py       # 정규식
-│   │   │   ├── style_cop_page.py   # 서식 교정
-│   │   │   ├── table_doctor_page.py # 표 교정
-│   │   │   ├── doc_diff_page.py    # 문서 비교
-│   │   │   ├── smart_toc_page.py   # 목차
-│   │   │   ├── watermark_page.py   # 워터마크
-│   │   │   ├── header_footer_page.py # 헤더/푸터
-│   │   │   ├── bookmark_page.py    # 북마크
-│   │   │   ├── hyperlink_page.py   # 링크 검사
-│   │   │   ├── image_extractor_page.py # 이미지 추출
-│   │   │   ├── action_console_page.py # 고급 액션 콘솔
-│   │   │   └── settings_page.py    # 설정
-│   │   └── widgets/           # 공통 위젯
-│   │       ├── file_list.py        # 파일 목록
-│   │       ├── feature_card.py     # 기능 카드
-│   │       ├── progress_card.py    # 진행률 표시
-│   │       ├── sidebar_button.py   # 사이드바 버튼
-│   │       ├── page_header.py      # 페이지 헤더
-│   │       ├── toast.py            # 알림 메시지
-│   │       ├── favorites_panel.py  # 즐겨찾기 패널
-│   │       └── history_panel.py    # 작업 히스토리
-│   └── utils/                 # 유틸리티
-│       ├── worker.py          # 백그라운드 작업 (QThread)
-│       ├── logger.py          # 로깅 시스템
-│       ├── settings.py        # 설정 관리
-│       ├── theme_manager.py   # 테마 관리
-│       └── history_manager.py # 히스토리 관리
-└── tests/                     # 단위 테스트
-```
+- `worker.py` - 백그라운드 작업과 결과 집계
+- `output_paths.py` - 출력 경로/충돌 회피 정책
+- `filename_sanitizer.py` - 안전한 파일명 생성
+- `qss_renderer.py` - 테마 토큰 기반 QSS 생성
+- `com_init.py` - COM 초기화 보조
+- `version.py`, `settings.py`, `theme_manager.py`, `logger.py`, `history_manager.py`
 
 ---
 
 ## ⚠️ 개발 규칙
 
 ### 필수 사항
-1. **타입 힌트**: 모든 함수에 적용
-2. **dataclass**: 데이터 구조체에 사용
-3. **Context Manager**: HWP 핸들러에 `with` 문 사용
-4. **에러 처리**: try-except로 안전하게 처리
+1. 모든 함수와 핵심 멤버에 타입 힌트를 적용합니다.
+2. Qt Optional 객체는 명시적으로 좁혀서 다룹니다.
+3. 워커 결과 타입은 UI까지 동일한 구조로 전달합니다.
+4. 저장 경로와 충돌 회피 로직은 공통 유틸리티를 재사용합니다.
+5. 로그, 오류 메시지, docstring은 UTF-8 한국어 기준으로 정리합니다.
 
 ### 금지 사항
-1. ❌ Pandas/NumPy 사용
-2. ❌ 전역 변수 사용
-3. ❌ TODO/FIXME 주석
-4. ❌ 하드코딩된 파일 경로
+1. ❌ Pandas/NumPy 추가
+2. ❌ 근거 없는 `Any` 남발
+3. ❌ TODO/FIXME 주석 방치
+4. ❌ 하드코딩된 절대 경로
+5. ❌ 깨진 한글 문자열 커밋
 
 ---
 
 ## 🔧 자주 사용하는 명령어
 
 ```bash
-# 의존성 설치
 pip install -r requirements.txt
-
-# 앱 실행
 python main.py
-
-# 모듈 테스트
-python -c "from src.core import *; print('Core OK')"
-python -c "from src.ui.pages import *; print('Pages OK')"
+pyright .
+pytest -q
+python scripts/verify_core_modules.py
+python scripts/perf_smoke.py
 ```
 
 ---
 
 ## 📝 새 기능 추가 시
 
-1. `src/core/` 에 비즈니스 로직 모듈 생성
-2. `src/core/__init__.py` 에 export 추가
-3. `src/ui/pages/` 에 UI 페이지 생성
-4. `src/ui/pages/__init__.py` 에 export 추가
-5. `main_window.py` 사이드바에 메뉴 추가
-6. `main_window.py` 페이지 스택에 위젯 추가
+1. `src/core/`에 비즈니스 로직을 추가합니다.
+2. 필요하면 `src/core/__init__.py` export를 갱신합니다.
+3. `src/ui/pages/`에 대응 페이지를 추가합니다.
+4. `src/ui/pages/__init__.py` lazy export와 `main_window.py` 페이지 로딩을 갱신합니다.
+5. 워커가 필요하면 `src/utils/worker.py` 패턴을 재사용합니다.
+6. `pyright .`와 `pytest -q`를 통과시킨 뒤 문서를 업데이트합니다.
 
 ---
 
-## 🧪 검증 방법
+## 🧪 현재 검증 기준 (2026-03-10)
 
-```bash
-# 전체 모듈 임포트 테스트
-python -c "
-from src.core import HwpHandler, ExcelHandler
-from src.core import TemplateStore, MacroRecorder, RegexReplacer
-from src.core import StyleCop, TableDoctor, DocDiff, SmartTOC
-from src.ui.pages import HomePage, ConvertPage, MergeSplitPage, DataInjectPage
-from src.ui.pages import TemplatePage, MacroPage, RegexPage
-from src.ui.pages import StyleCopPage, TableDoctorPage, DocDiffPage, SmartTocPage
-print('All modules OK')
-"
-```
+- `pyright .` => `0 errors, 0 warnings`
+- `pytest -q` => `72 passed, 2 skipped`
+- 인코딩 정리 완료:
+  - `src/utils/worker.py`
+  - `src/core/hwp_handler.py`
+- 최신 정합성 반영:
+  - `ActionRunner` handler 타입을 `Protocol` 기반으로 정리
+  - 링크 검사 결과 타입을 `(filename, LinkInfo)`로 고정
+  - `QApplication.instance()`와 Qt 레이아웃 접근의 Optional 추론 문제 해소
 
 ---
 
-## 📌 운영 정합성 메모 (2026-02-28)
+## 📌 운영 메모
 
-- 최신 회귀 기준:
-  - `pytest -q` => `65 passed, 2 skipped`
-- 매크로 녹화 구현 범위:
-  - `Macro Page`의 녹화 시작/종료 UI + `Action Console` 성공 실행 명령 기록(`run_action`, `execute_action`)
-- 저장 정책 기본값:
-  - Action Console/북마크 삭제 계열은 기본 **원본 보존(새 파일 저장)**, 덮어쓰기는 명시 선택 시만 허용
-- Smart TOC 분석 정책:
-  - form-feed 기반 페이지 추정 + HWPX 스타일 힌트 보조 분석(실패 시 패턴 기반 폴백)
-
-## 📌 운영 정합성 메모 (2026-03-03)
-
-- 최신 회귀 기준:
-  - `pytest -q` => `72 passed, 2 skipped`
-- 안정화 업데이트:
-  - Header/Footer, Watermark Worker 성공 판정 로직을 fail_count 기준으로 정합화
-  - remove 모드 출력 충돌 회피 로직 통일(`resolve_output_path`)
-  - 이미지 추출을 파일별 하위폴더 정책으로 고정(`batch_extract` 경유)
-  - DocDiff fallback 임시 파일 정리 보장(`try/finally`)
-  - 매크로 ID 충돌 방지(마이크로초 + fallback)
+- 전역 상태는 원칙적으로 지양하지만, 매크로 녹화는 `Action Console`과 `Macro Page` 간 세션 공유를 위해 예외적으로 공유 상태를 사용합니다.
+- 편집성 기능은 기본적으로 **원본 보존(새 파일 저장)** 정책을 따릅니다.
+- EXE 빌드는 `hwp_master.spec` 기준이며 결과물은 `dist/` 아래에 생성됩니다.

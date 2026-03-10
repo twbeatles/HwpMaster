@@ -1,6 +1,6 @@
-﻿"""
+"""
 Worker Module
-QThread 湲곕컲 諛깃렇?쇱슫???묒뾽 泥섎━
+QThread 기반 백그라운드 작업 처리
 
 Author: HWP Master
 """
@@ -28,7 +28,7 @@ def make_summary_data(
     fail_count: int,
     **extra: Any,
 ) -> dict[str, Any]:
-    """WorkerResult.data??怨듯넻 ?ㅻ? 媛뺤젣?섎뒗 ?ы띁"""
+    """WorkerResult.data의 공통 키를 강제하는 헬퍼."""
     data: dict[str, Any] = {
         "cancelled": bool(cancelled),
         "success_count": int(success_count),
@@ -60,7 +60,7 @@ def _build_failed_summary(results: list[Any], *, max_items: int = 3) -> Optional
 
 
 class WorkerState(Enum):
-    """?묒뾽???곹깭"""
+    """작업 상태."""
     IDLE = "idle"
     RUNNING = "running"
     PAUSED = "paused"
@@ -71,52 +71,52 @@ class WorkerState(Enum):
 
 @dataclass
 class WorkerResult:
-    """?묒뾽 寃곌낵"""
+    """작업 결과."""
     success: bool
     data: Any = None
     error_message: Optional[str] = None
 
 
 class BaseWorker(QThread):
-    """湲곕낯 ?묒뾽???대옒??"""
-    
-    # ?쒓렇???뺤쓽
+    """기본 작업자 클래스."""
+
+    # 시그널 정의
     progress = Signal(int, int, str)  # current, total, message
     status_changed = Signal(str)  # status message
     finished_with_result = Signal(object)  # WorkerResult
     error_occurred = Signal(str)  # error message
-    
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        
+
         self._state = WorkerState.IDLE
         self._mutex = QMutex()
         self._cancel_requested = False
         self._result_emitted = False
-    
+
     @property
     def state(self) -> WorkerState:
         with QMutexLocker(self._mutex):
             return self._state
-    
+
     @state.setter
     def state(self, value: WorkerState) -> None:
         with QMutexLocker(self._mutex):
             self._state = value
-    
+
     def cancel(self) -> None:
-        """?묒뾽 痍⑥냼 ?붿껌"""
+        """작업 취소 요청."""
         with QMutexLocker(self._mutex):
             self._cancel_requested = True
             self._state = WorkerState.CANCELLED
-    
+
     def is_cancelled(self) -> bool:
-        """痍⑥냼 ?붿껌 ?뺤씤"""
+        """취소 요청 여부 확인."""
         with QMutexLocker(self._mutex):
             return self._cancel_requested
-    
+
     def run(self) -> None:
-        """?묒뾽 ?ㅽ뻾 (?쒕툕?대옒?ㅼ뿉??援ы쁽)"""
+        """작업 실행. 하위 클래스에서 구현한다."""
         raise NotImplementedError
 
     def _emit_finished_once(self, result: WorkerResult) -> None:
@@ -128,8 +128,8 @@ class BaseWorker(QThread):
 
 
 class ConversionWorker(BaseWorker):
-    """蹂???묒뾽??"""
-    
+    """문서 변환 작업자."""
+
     def __init__(
         self,
         files: list[str],
@@ -138,32 +138,32 @@ class ConversionWorker(BaseWorker):
         parent=None
     ) -> None:
         super().__init__(parent)
-        
+
         self._files = files
         self._target_format = target_format
         self._output_dir = output_dir
-    
+
     def run(self) -> None:
-        """蹂???ㅽ뻾"""
+        """변환 실행."""
         from ..core.hwp_handler import HwpHandler, ConvertFormat
 
         self.state = WorkerState.RUNNING
-        self.status_changed.emit("蹂??以鍮?以?..")
-        
-        # ?щ㎎ 留ㅽ븨
+        self.status_changed.emit("변환 준비 중...")
+
+        # 형식 매핑
         format_map = {
             "PDF": ConvertFormat.PDF,
             "TXT": ConvertFormat.TXT,
             "HWPX": ConvertFormat.HWPX,
             "JPG": ConvertFormat.JPG,
         }
-        
+
         target_format = format_map.get(self._target_format.upper(), ConvertFormat.PDF)
-        
+
         success_count = 0
         fail_count = 0
         results = []
-        
+
         try:
             with com_context(), HwpHandler() as handler:
                 total = len(self._files)
@@ -171,14 +171,14 @@ class ConversionWorker(BaseWorker):
                 out_dir: Optional[str] = None
                 if self._output_dir:
                     out_dir = ensure_dir(self._output_dir)
-                
+
                 for idx, file_path in enumerate(self._files, start=1):
-                    # 痍⑥냼 ?뺤씤
+                    # 취소 요청 확인
                     if self.is_cancelled():
-                        self.status_changed.emit("?묒뾽??痍⑥냼?섏뿀?듬땲??")
+                        self.status_changed.emit("작업이 취소되었습니다.")
                         self._emit_finished_once(WorkerResult(
                             success=False,
-                            error_message="?ъ슜?먭? ?묒뾽??痍⑥냼?덉뒿?덈떎.",
+                            error_message="사용자가 작업을 취소했습니다.",
                             data={
                                 "cancelled": True,
                                 "success_count": success_count,
@@ -187,14 +187,14 @@ class ConversionWorker(BaseWorker):
                             }
                         ))
                         return
-                    
-                    # 吏꾪뻾瑜??낅뜲?댄듃
+
+                    # 진행 상태 업데이트
                     from pathlib import Path
                     filename = Path(file_path).name
                     self.progress.emit(idx, total, filename)
-                    self.status_changed.emit(f"蹂??以? {filename}")
-                    
-                    # 蹂???ㅽ뻾
+                    self.status_changed.emit(f"변환 중: {filename}")
+
+                    # 파일 변환 실행
                     if out_dir:
                         output_path = resolve_output_path(
                             out_dir,
@@ -203,15 +203,15 @@ class ConversionWorker(BaseWorker):
                         )
                     else:
                         output_path = None
-                    
+
                     result = handler.convert(file_path, target_format, output_path)
                     results.append(result)
-                    
+
                     if result.success:
                         success_count += 1
                     else:
                         fail_count += 1
-            
+
             self.state = WorkerState.FINISHED
             self._emit_finished_once(WorkerResult(
                 success=(fail_count == 0) and not self.is_cancelled(),
@@ -222,7 +222,7 @@ class ConversionWorker(BaseWorker):
                     "results": results
                 }
             ))
-            
+
         except Exception as e:
             self.state = WorkerState.ERROR
             self.error_occurred.emit(str(e))
@@ -239,8 +239,8 @@ class ConversionWorker(BaseWorker):
 
 
 class MergeWorker(BaseWorker):
-    """蹂묓빀 ?묒뾽??"""
-    
+    """문서 병합 작업자."""
+
     def __init__(
         self,
         files: list[str],
@@ -248,31 +248,31 @@ class MergeWorker(BaseWorker):
         parent=None
     ) -> None:
         super().__init__(parent)
-        
+
         self._files = files
         self._output_path = output_path
-    
+
     def run(self) -> None:
-        """蹂묓빀 ?ㅽ뻾"""
+        """병합 실행."""
         from ..core.hwp_handler import HwpHandler
-        
+
         self.state = WorkerState.RUNNING
-        self.status_changed.emit("蹂묓빀 以鍮?以?..")
-        
+        self.status_changed.emit("병합 준비 중...")
+
         try:
             with com_context(), HwpHandler() as handler:
                 def progress_cb(current: int, total: int, name: str) -> None:
                     if self.is_cancelled():
-                        raise InterruptedError("?묒뾽??痍⑥냼?섏뿀?듬땲??")
+                        raise InterruptedError("작업이 취소되었습니다.")
                     self.progress.emit(current, total, name)
-                    self.status_changed.emit(f"蹂묓빀 以? {name}")
-                
+                    self.status_changed.emit(f"병합 중: {name}")
+
                 result = handler.merge_files(
                     self._files,
                     self._output_path,
                     progress_callback=progress_cb
                 )
-            
+
             self.state = WorkerState.FINISHED
             self._emit_finished_once(WorkerResult(
                 success=result.success,
@@ -284,7 +284,7 @@ class MergeWorker(BaseWorker):
                 },
                 error_message=result.error_message,
             ))
-            
+
         except InterruptedError as e:
             self.state = WorkerState.CANCELLED
             self.status_changed.emit(str(e))
@@ -304,7 +304,7 @@ class MergeWorker(BaseWorker):
 
 
 class DataInjectWorker(BaseWorker):
-    """?곗씠??二쇱엯 ?묒뾽??"""
+    """데이터 주입 작업자."""
 
     def __init__(
         self,
@@ -401,11 +401,11 @@ class DataInjectWorker(BaseWorker):
                 yield {str(k): "" if v is None else str(v) for k, v in row.items()}
 
     def run(self) -> None:
-        """?곗씠??二쇱엯 ?ㅽ뻾"""
+        """데이터 주입 실행."""
         from ..core.hwp_handler import HwpHandler
 
         self.state = WorkerState.RUNNING
-        self.status_changed.emit("?곗씠??二쇱엯 以鍮?以?..");
+        self.status_changed.emit("데이터 주입 준비 중...")
 
         success_count = 0
         fail_count = 0
@@ -413,19 +413,19 @@ class DataInjectWorker(BaseWorker):
         filename_collisions = 0
 
         try:
-            self.status_changed.emit("?곗씠???뚯씪 ?쎈뒗 以?..");
+            self.status_changed.emit("데이터 파일 확인 중...")
             data_path = Path(self._data_file)
             if not data_path.exists():
                 self.state = WorkerState.ERROR
                 self._emit_finished_once(WorkerResult(
                     success=False,
-                    error_message=f"?곗씠???뚯씪??議댁옱?섏? ?딆뒿?덈떎: {self._data_file}",
+                    error_message=f"데이터 파일이 존재하지 않습니다: {self._data_file}",
                     data={"cancelled": False, "success_count": 0, "fail_count": 1},
                 ))
                 return
 
             if self.is_cancelled():
-                raise InterruptedError("?묒뾽??痍⑥냼?섏뿀?듬땲??")
+                raise InterruptedError("작업이 취소되었습니다.")
 
             if data_path.suffix.lower() == ".csv":
                 total_rows = self._estimate_csv_rows(data_path)
@@ -441,7 +441,7 @@ class DataInjectWorker(BaseWorker):
                 self.state = WorkerState.ERROR
                 self._emit_finished_once(WorkerResult(
                     success=False,
-                    error_message="?곗씠???뚯씪??鍮꾩뼱?덉뒿?덈떎.",
+                    error_message="데이터 파일이 비어 있습니다.",
                     data={"cancelled": False, "success_count": 0, "fail_count": 1},
                 ))
                 return
@@ -454,10 +454,10 @@ class DataInjectWorker(BaseWorker):
 
                 def progress_cb(current: int, total: int, name: str) -> None:
                     if self.is_cancelled():
-                        raise InterruptedError("?묒뾽??痍⑥냼?섏뿀?듬땲??")
+                        raise InterruptedError("작업이 취소되었습니다.")
                     shown_total = total_rows if total_rows > 0 else total
                     self.progress.emit(current, shown_total, name)
-                    self.status_changed.emit(f"?앹꽦 以? {current}/{shown_total if shown_total > 0 else '?'}")
+                    self.status_changed.emit(f"생성 중: {current}/{shown_total if shown_total > 0 else '?'}")
 
                 for r in handler.iter_inject_data(
                     template_path=self._template_path,
@@ -520,8 +520,8 @@ class DataInjectWorker(BaseWorker):
             ))
 
 class MetadataCleanWorker(BaseWorker):
-    """硫뷀??곗씠???뺣━ ?묒뾽??"""
-    
+    """메타정보 정리 작업자."""
+
     def __init__(
         self,
         files: list[str],
@@ -530,25 +530,25 @@ class MetadataCleanWorker(BaseWorker):
         parent=None
     ) -> None:
         super().__init__(parent)
-        
+
         self._files = files
         self._output_dir = output_dir
         self._options = options
-    
+
     def run(self) -> None:
-        """硫뷀??곗씠???뺣━ ?ㅽ뻾"""
+        """메타정보 정리 실행."""
         from ..core.hwp_handler import HwpHandler
-        
+
         self.state = WorkerState.RUNNING
-        self.status_changed.emit("硫뷀??뺣낫 ?뺣━ 以鍮?以?..")
-        
+        self.status_changed.emit("메타정보 정리 준비 중...")
+
         success_count = 0
         fail_count = 0
         pii_total = 0
         warnings: list[str] = []
         password_requested = bool(str((self._options or {}).get("document_password", "")).strip())
         password_not_applied = 0
-        
+
         try:
             with com_context(), HwpHandler() as handler:
                 total = len(self._files)
@@ -556,13 +556,13 @@ class MetadataCleanWorker(BaseWorker):
                 out_dir: Optional[str] = None
                 if self._output_dir:
                     out_dir = ensure_dir(self._output_dir)
-                
+
                 for idx, file_path in enumerate(self._files, start=1):
                     if self.is_cancelled():
-                        self.status_changed.emit("?묒뾽??痍⑥냼?섏뿀?듬땲??")
+                        self.status_changed.emit("작업이 취소되었습니다.")
                         self._emit_finished_once(WorkerResult(
                             success=False,
-                            error_message="?ъ슜?먭? ?묒뾽??痍⑥냼?덉뒿?덈떎.",
+                            error_message="사용자가 작업을 취소했습니다.",
                             data={
                                 "cancelled": True,
                                 "success_count": success_count,
@@ -570,12 +570,12 @@ class MetadataCleanWorker(BaseWorker):
                             }
                         ))
                         return
-                    
+
                     from pathlib import Path
                     filename = Path(file_path).name
                     self.progress.emit(idx, total, filename)
-                    self.status_changed.emit(f"?뺣━ 以? {filename}")
-                    
+                    self.status_changed.emit(f"정리 중: {filename}")
+
                     output_path = None
                     if out_dir:
                         output_path = resolve_output_path(out_dir, file_path, suffix="_metadata_cleaned")
@@ -594,7 +594,7 @@ class MetadataCleanWorker(BaseWorker):
 
                     for msg in result.warnings:
                         warnings.append(f"{filename}: {msg}")
-            
+
             self.state = WorkerState.FINISHED
             self._emit_finished_once(WorkerResult(
                 success=fail_count == 0,
@@ -607,7 +607,7 @@ class MetadataCleanWorker(BaseWorker):
                     "warnings": warnings,
                 }
             ))
-            
+
         except Exception as e:
             self.state = WorkerState.ERROR
             self.error_occurred.emit(str(e))
@@ -626,8 +626,8 @@ class MetadataCleanWorker(BaseWorker):
 
 
 class SplitWorker(BaseWorker):
-    """遺꾪븷 ?묒뾽??"""
-    
+    """문서 분할 작업자."""
+
     def __init__(
         self,
         file_path: str,
@@ -636,42 +636,42 @@ class SplitWorker(BaseWorker):
         parent=None
     ) -> None:
         super().__init__(parent)
-        
+
         self._file_path = file_path
         self._page_ranges = page_ranges
         self._output_dir = output_dir
-    
+
     def run(self) -> None:
-        """遺꾪븷 ?ㅽ뻾"""
+        """분할 실행."""
         from ..core.hwp_handler import HwpHandler
-        
+
         self.state = WorkerState.RUNNING
-        self.status_changed.emit("遺꾪븷 以鍮?以?..")
-        
+        self.status_changed.emit("분할 준비 중...")
+
         success_count = 0
         fail_count = 0
-        
+
         try:
             with com_context(), HwpHandler() as handler:
                 def progress_cb(current: int, total: int, name: str) -> None:
                     if self.is_cancelled():
-                        raise InterruptedError("?묒뾽??痍⑥냼?섏뿀?듬땲??")
+                        raise InterruptedError("작업이 취소되었습니다.")
                     self.progress.emit(current, total, name)
-                    self.status_changed.emit(f"遺꾪븷 以? {current}/{total}")
-                
+                    self.status_changed.emit(f"분할 중: {current}/{total}")
+
                 results = handler.split_file(
                     self._file_path,
                     self._page_ranges,
                     self._output_dir,
                     progress_callback=progress_cb
                 )
-                
+
                 for r in results:
                     if r.success:
                         success_count += 1
                     else:
                         fail_count += 1
-            
+
             self.state = WorkerState.FINISHED
             self._emit_finished_once(WorkerResult(
                 success=fail_count == 0,
@@ -681,7 +681,7 @@ class SplitWorker(BaseWorker):
                     "fail_count": fail_count
                 }
             ))
-            
+
         except InterruptedError as e:
             self.state = WorkerState.CANCELLED
             self.status_changed.emit(str(e))
@@ -694,7 +694,7 @@ class SplitWorker(BaseWorker):
                     "fail_count": fail_count,
                 },
             ))
-            
+
         except Exception as e:
             self.state = WorkerState.ERROR
             self.error_occurred.emit(str(e))
@@ -710,8 +710,8 @@ class SplitWorker(BaseWorker):
 
 
 class ImageExtractWorker(BaseWorker):
-    """?대?吏 異붿텧 ?묒뾽??"""
-    
+    """이미지 추출 작업자."""
+
     def __init__(
         self,
         files: list[str],
@@ -723,42 +723,38 @@ class ImageExtractWorker(BaseWorker):
         self._files = files
         self._output_dir = output_dir
         self._prefix = prefix
-    
+
     def run(self) -> None:
         from ..core.image_extractor import ImageExtractor
-        
+
         self.state = WorkerState.RUNNING
-        self.status_changed.emit("?대?吏 異붿텧 以鍮?以?..")
-        
-        # ?대┰蹂대뱶 肄쒕갚 ?뺤쓽 (Worker ?ㅻ젅?쒖뿉???ㅽ뻾?⑥뿉 二쇱쓽)
-        # ?섏?留??대┰蹂대뱶??硫붿씤 ?ㅻ젅?쒖뿉???묎렐?댁빞 ???섎룄 ?덉쓬.
-        # ?쇰떒 ImageExtractor?먯꽌 肄쒕갚???듯빐 硫붿씤 ?ㅻ젅?쒖쓽 ?숈옉???좊룄?섍굅??
-        # ?ш린?쒕뒗 ?⑥닚???뚯씪 泥섎━??吏묒쨷.
-        # *二쇱쓽*: refactor濡??명빐 ImageExtractor??clipboard_callback??諛쏆쓬.
-        # Worker?먯꽌 ?뚮┫ ?뚮뒗 win32 api ?깆쓣 ?곗? ?딅뒗 ???대┰蹂대뱶 ?묎렐???대젮?????덉쓬.
-        # 洹몃윭??ImageExtractor??fallback?대굹 file save 諛⑹떇???대떎硫?臾몄젣 ?놁쓬.
-        # ?ш린?쒕뒗 ?⑥닚???ㅽ뻾.
-        
+        self.status_changed.emit("이미지 추출 준비 중...")
+
+        # 클립보드 접근은 UI 스레드 제약이 있어 주의가 필요하다.
+        # 이 Worker는 파일 저장 기반 추출만 담당하고,
+        # ImageExtractor 내부 fallback 경로를 그대로 사용한다.
+        #
+        # 추후 신호 기반 협업이 필요하면 UI 스레드 전용 경로를 추가한다.
+
         success_count = 0
         fail_count = 0
         total_images = 0
         collected: list[tuple[str, str]] = []
-        
+
         try:
-            # ?대┰蹂대뱶 泥섎━瑜??꾪빐 硫붿씤 ?ㅻ젅?쒖? ?듭떊???꾩슂?????덉쑝??
-            # ?꾩옱 援ъ“??蹂듭옟?섎?濡?None ?꾨떖 (寃쎄퀬 濡쒓렇 李랁옒)
-            # 媛쒖꽑?? 硫붿씤 ?ㅻ젅?쒖뿉 ?붿껌?섎뒗 諛⑹떇 援ы쁽 ?꾩슂 媛?μ꽦
-            
+            # 현재 구현은 UI 스레드와 직접 통신하지 않는다.
+            # 필요한 경우 메인 스레드 신호/슬롯 기반 경로를 별도로 추가한다.
+
             with com_context(), ImageExtractor() as extractor:
                 total = len(self._files)
-                
+
                 for idx, file_path in enumerate(self._files, start=1):
                     if self.is_cancelled():
                         self.state = WorkerState.CANCELLED
-                        self.status_changed.emit("?묒뾽??痍⑥냼?섏뿀?듬땲??")
+                        self.status_changed.emit("작업이 취소되었습니다.")
                         self._emit_finished_once(WorkerResult(
                             success=False,
-                            error_message="?ъ슜?먭? ?묒뾽??痍⑥냼?덉뒿?덈떎.",
+                            error_message="사용자가 작업을 취소했습니다.",
                             data={
                                 "cancelled": True,
                                 "success_count": success_count,
@@ -768,11 +764,11 @@ class ImageExtractWorker(BaseWorker):
                             },
                         ))
                         return
-                        
+
                     from pathlib import Path
                     filename = Path(file_path).name
                     self.progress.emit(idx, total, filename)
-                    self.status_changed.emit(f"異붿텧 以? {filename}")
+                    self.status_changed.emit(f"추출 중: {filename}")
 
                     batch_results = extractor.batch_extract(
                         [file_path],
@@ -783,7 +779,7 @@ class ImageExtractWorker(BaseWorker):
                         fail_count += 1
                         continue
                     result = batch_results[0]
-                    
+
                     if result.success:
                         success_count += 1
                         total_images += len(result.images)
@@ -791,7 +787,7 @@ class ImageExtractWorker(BaseWorker):
                             collected.append((filename, img.saved_path))
                     else:
                         fail_count += 1
-            
+
             self.state = WorkerState.FINISHED
             self._emit_finished_once(WorkerResult(
                 success=fail_count == 0,
@@ -803,7 +799,7 @@ class ImageExtractWorker(BaseWorker):
                     "images": collected,
                 },
             ))
-            
+
         except Exception as e:
             self.state = WorkerState.ERROR
             self.error_occurred.emit(str(e))
@@ -821,8 +817,8 @@ class ImageExtractWorker(BaseWorker):
 
 
 class BookmarkWorker(BaseWorker):
-    """遺곷쭏???묒뾽??(??젣/?대낫?닿린)"""
-    
+    """북마크 작업자 (삭제/내보내기/추출)."""
+
     def __init__(
         self,
         mode: str, # "delete" or "export" or "extract" or "delete_selected"
@@ -836,24 +832,24 @@ class BookmarkWorker(BaseWorker):
         self._files = files
         self._output_dir = output_dir
         self._selected_map = selected_map or {}
-    
+
     def run(self) -> None:
         from ..core.bookmark_manager import BookmarkManager
-        
+
         self.state = WorkerState.RUNNING
-        self.status_changed.emit("遺곷쭏???묒뾽 以鍮?以?..")
-        
+        self.status_changed.emit("북마크 작업 준비 중...")
+
         try:
             with com_context(), BookmarkManager() as manager:
                 def progress_cb(current, total, name):
                     if self.is_cancelled():
-                        raise InterruptedError("?묒뾽??痍⑥냼?섏뿀?듬땲??")
+                        raise InterruptedError("작업이 취소되었습니다.")
                     self.progress.emit(current, total, name)
-                    self.status_changed.emit(f"泥섎━ 以? {name}")
+                    self.status_changed.emit(f"처리 중: {name}")
 
                 if self._mode == "delete":
                     results = manager.batch_delete_bookmarks(
-                        self._files, 
+                        self._files,
                         self._output_dir,
                         progress_callback=progress_cb
                     )
@@ -875,12 +871,12 @@ class BookmarkWorker(BaseWorker):
                         "fail_count": fail_count,
                         "total": len(results),
                     }
-                 
+
                 elif self._mode == "export":
                     if self._output_dir is None:
                         self.state = WorkerState.ERROR
                         self._emit_finished_once(
-                            WorkerResult(success=False, error_message="異쒕젰 ?대뜑媛 ?꾩슂?⑸땲??")
+                            WorkerResult(success=False, error_message="출력 폴더가 필요합니다.")
                         )
                         return
 
@@ -892,7 +888,7 @@ class BookmarkWorker(BaseWorker):
                     success_count = sum(1 for r in results if r.success)
                     fail_count = len(self._files) - success_count
                     data = {"cancelled": False, "success_count": success_count, "fail_count": fail_count, "total": len(self._files)}
-                
+
                 else: # extract
                     results = []
                     total = len(self._files)
@@ -905,11 +901,11 @@ class BookmarkWorker(BaseWorker):
                             # UI 표시를 위해 (원본 파일 경로, 북마크정보) 튜플 전달
                             for bm in res.bookmarks:
                                 all_bookmarks.append((str(file_path), bm))
-                     
+
                     success_count = sum(1 for r in results if r.success)
                     fail_count = len(results) - success_count
                     data = {"cancelled": False, "success_count": success_count, "fail_count": fail_count, "bookmarks": all_bookmarks}
-                 
+
             summary_error = None
             if fail_count > 0:
                 failed_items = [
@@ -928,7 +924,7 @@ class BookmarkWorker(BaseWorker):
                 data=data,
             ))
 
-            
+
         except InterruptedError as e:
             self.state = WorkerState.CANCELLED
             self.status_changed.emit(str(e))
@@ -948,7 +944,7 @@ class BookmarkWorker(BaseWorker):
 
 
 class HyperlinkWorker(BaseWorker):
-    """?섏씠?쇰쭅??寃???묒뾽??"""
+    """하이퍼링크 검사 작업자."""
 
     def __init__(
         self,
@@ -972,15 +968,15 @@ class HyperlinkWorker(BaseWorker):
         self._cache_enabled = bool(cache_enabled)
 
     def run(self) -> None:
-        from ..core.hyperlink_checker import HyperlinkChecker
+        from ..core.hyperlink_checker import HyperlinkChecker, LinkInfo
 
         self.state = WorkerState.RUNNING
-        self.status_changed.emit("留곹겕 寃??以鍮?以?..");
+        self.status_changed.emit("링크 검사 준비 중...")
 
         success_count = 0
         fail_count = 0
         total_links = 0
-        all_links = []
+        all_links: list[tuple[str, LinkInfo]] = []
         report_fail_count = 0
         warnings: list[str] = []
 
@@ -996,10 +992,10 @@ class HyperlinkWorker(BaseWorker):
                 for idx, file_path in enumerate(self._files, start=1):
                     if self.is_cancelled():
                         self.state = WorkerState.CANCELLED
-                        self.status_changed.emit("?묒뾽??痍⑥냼?섏뿀?듬땲??")
+                        self.status_changed.emit("작업이 취소되었습니다.")
                         self._emit_finished_once(WorkerResult(
                             success=False,
-                            error_message="?ъ슜?먭? ?묒뾽??痍⑥냼?덉뒿?덈떎.",
+                            error_message="사용자가 작업을 취소했습니다.",
                             data={
                                 "cancelled": True,
                                 "success_count": success_count,
@@ -1014,7 +1010,7 @@ class HyperlinkWorker(BaseWorker):
 
                     filename = Path(file_path).name
                     self.progress.emit(idx, total, filename)
-                    self.status_changed.emit(f"寃??以? {filename}")
+                    self.status_changed.emit(f"검사 중: {filename}")
 
                     result = checker.check_links(file_path)
 
@@ -1068,8 +1064,8 @@ class HyperlinkWorker(BaseWorker):
             ))
 
 class HeaderFooterWorker(BaseWorker):
-    """?ㅻ뜑/?명꽣 ?묒뾽??"""
-    
+    """헤더/푸터 작업자."""
+
     def __init__(
         self,
         mode: str, # "apply" or "remove"
@@ -1083,26 +1079,26 @@ class HeaderFooterWorker(BaseWorker):
         self._files = files
         self._config = config
         self._output_dir = output_dir
-    
+
     def run(self) -> None:
         from ..core.header_footer_manager import HeaderFooterManager
-        
+
         self.state = WorkerState.RUNNING
-        self.status_changed.emit("?묒뾽 以鍮?以?..")
-        
+        self.status_changed.emit("헤더/푸터 작업 준비 중...")
+
         try:
             with com_context(), HeaderFooterManager() as manager:
                 def progress_cb(current, total, name):
                     if self.is_cancelled():
-                        raise InterruptedError("?묒뾽??痍⑥냼?섏뿀?듬땲??")
+                        raise InterruptedError("작업이 취소되었습니다.")
                     self.progress.emit(current, total, name)
-                    self.status_changed.emit(f"泥섎━ 以? {name}")
-                
+                    self.status_changed.emit(f"처리 중: {name}")
+
                 if self._mode == "apply":
                     if self._config is None:
                         self.state = WorkerState.ERROR
                         self._emit_finished_once(
-                            WorkerResult(success=False, error_message="?ㅻ뜑/?명꽣 ?ㅼ젙???꾩슂?⑸땲??")
+                            WorkerResult(success=False, error_message="헤더/푸터 설정이 필요합니다.")
                         )
                         return
 
@@ -1131,7 +1127,7 @@ class HeaderFooterWorker(BaseWorker):
                 error_message=summary_error,
                 data={"cancelled": False, "success_count": success_count, "fail_count": fail_count, "total": len(self._files)}
             ))
-            
+
         except InterruptedError as e:
             self.state = WorkerState.CANCELLED
             self.status_changed.emit(str(e))
@@ -1151,8 +1147,8 @@ class HeaderFooterWorker(BaseWorker):
 
 
 class WatermarkWorker(BaseWorker):
-    """?뚰꽣留덊겕 ?묒뾽??"""
-    
+    """워터마크 작업자."""
+
     def __init__(
         self,
         mode: str, # "apply" or "remove"
@@ -1166,26 +1162,26 @@ class WatermarkWorker(BaseWorker):
         self._files = files
         self._config = config
         self._output_dir = output_dir
-    
+
     def run(self) -> None:
         from ..core.watermark_manager import WatermarkManager
-        
+
         self.state = WorkerState.RUNNING
-        self.status_changed.emit("?묒뾽 以鍮?以?..")
-        
+        self.status_changed.emit("워터마크 작업 준비 중...")
+
         try:
             with com_context(), WatermarkManager() as manager:
                 def progress_cb(current, total, name):
                     if self.is_cancelled():
-                        raise InterruptedError("?묒뾽??痍⑥냼?섏뿀?듬땲??")
+                        raise InterruptedError("작업이 취소되었습니다.")
                     self.progress.emit(current, total, name)
-                    self.status_changed.emit(f"泥섎━ 以? {name}")
-                
+                    self.status_changed.emit(f"처리 중: {name}")
+
                 if self._mode == "apply":
                     if self._config is None:
                         self.state = WorkerState.ERROR
                         self._emit_finished_once(
-                            WorkerResult(success=False, error_message="?뚰꽣留덊겕 ?ㅼ젙???꾩슂?⑸땲??")
+                            WorkerResult(success=False, error_message="워터마크 설정이 필요합니다.")
                         )
                         return
 
@@ -1214,7 +1210,7 @@ class WatermarkWorker(BaseWorker):
                 error_message=summary_error,
                 data={"cancelled": False, "success_count": success_count, "fail_count": fail_count, "total": len(self._files)}
             ))
-            
+
         except InterruptedError as e:
             self.state = WorkerState.CANCELLED
             self.status_changed.emit(str(e))
@@ -1234,7 +1230,7 @@ class WatermarkWorker(BaseWorker):
 
 
 class RegexReplaceWorker(BaseWorker):
-    """?뺢퇋??移섑솚 ?묒뾽??(UI ?ㅻ젅??釉붾줈??諛⑹?)"""
+    """정규식 치환 작업자."""
 
     def __init__(
         self,
@@ -1269,7 +1265,7 @@ class RegexReplaceWorker(BaseWorker):
                         self.state = WorkerState.CANCELLED
                         self._emit_finished_once(WorkerResult(
                             success=False,
-                            error_message="?ъ슜?먭? ?묒뾽??痍⑥냼?덉뒿?덈떎.",
+                            error_message="사용자가 작업을 취소했습니다.",
                             data={
                                 "cancelled": True,
                                 "success_count": success_count,
@@ -1282,7 +1278,7 @@ class RegexReplaceWorker(BaseWorker):
                         return
 
                     self.progress.emit(idx, total, Path(file_path).name)
-                    self.status_changed.emit(f"移섑솚 以? {Path(file_path).name}")
+                    self.status_changed.emit(f"치환 중: {Path(file_path).name}")
 
                     output_path = resolve_output_path(out_dir, file_path)
                     res = replacer.replace_in_hwp(file_path, self._rules, output_path=output_path)
@@ -1328,7 +1324,7 @@ class RegexReplaceWorker(BaseWorker):
 
 
 class StyleCopWorker(BaseWorker):
-    """?쒖떇 ?듭씪 ?묒뾽??"""
+    """서식 교정 작업자."""
 
     def __init__(self, files: list[str], rule: Any, output_dir: str, parent=None) -> None:
         super().__init__(parent)
@@ -1355,7 +1351,7 @@ class StyleCopWorker(BaseWorker):
                         self.state = WorkerState.CANCELLED
                         self._emit_finished_once(WorkerResult(
                             success=False,
-                            error_message="?ъ슜?먭? ?묒뾽??痍⑥냼?덉뒿?덈떎.",
+                            error_message="사용자가 작업을 취소했습니다.",
                             data={
                                 "cancelled": True,
                                 "success_count": success_count,
@@ -1366,7 +1362,7 @@ class StyleCopWorker(BaseWorker):
                         return
 
                     self.progress.emit(idx, total, Path(file_path).name)
-                    self.status_changed.emit(f"?곸슜 以? {Path(file_path).name}")
+                    self.status_changed.emit(f"적용 중: {Path(file_path).name}")
 
                     output_path = resolve_output_path(out_dir, file_path)
                     res = cop.apply_style(file_path, self._rule, output_path=output_path)
@@ -1403,7 +1399,7 @@ class StyleCopWorker(BaseWorker):
 
 
 class TableDoctorWorker(BaseWorker):
-    """???ㅽ????묒뾽??"""
+    """표 교정 작업자."""
 
     def __init__(self, files: list[str], style: Any, output_dir: str, parent=None) -> None:
         super().__init__(parent)
@@ -1431,7 +1427,7 @@ class TableDoctorWorker(BaseWorker):
                         self.state = WorkerState.CANCELLED
                         self._emit_finished_once(WorkerResult(
                             success=False,
-                            error_message="?ъ슜?먭? ?묒뾽??痍⑥냼?덉뒿?덈떎.",
+                            error_message="사용자가 작업을 취소했습니다.",
                             data={
                                 "cancelled": True,
                                 "success_count": success_count,
@@ -1443,7 +1439,7 @@ class TableDoctorWorker(BaseWorker):
                         return
 
                     self.progress.emit(idx, total, Path(file_path).name)
-                    self.status_changed.emit(f"?곸슜 以? {Path(file_path).name}")
+                    self.status_changed.emit(f"교정 중: {Path(file_path).name}")
 
                     output_path = resolve_output_path(out_dir, file_path)
                     res = doctor.apply_style(file_path, self._style, output_path=output_path)
@@ -1483,7 +1479,7 @@ class TableDoctorWorker(BaseWorker):
 
 
 class DocDiffWorker(BaseWorker):
-    """臾몄꽌 鍮꾧탳 ?묒뾽??"""
+    """문서 비교 작업자."""
 
     def __init__(self, file1: str, file2: str, parent=None) -> None:
         super().__init__(parent)
@@ -1494,7 +1490,7 @@ class DocDiffWorker(BaseWorker):
         from ..core.doc_diff import DocDiff
 
         self.state = WorkerState.RUNNING
-        self.status_changed.emit("鍮꾧탳 以鍮?以?..")
+        self.status_changed.emit("비교 준비 중...")
 
         try:
             with com_context():
@@ -1502,13 +1498,13 @@ class DocDiffWorker(BaseWorker):
                     self.state = WorkerState.CANCELLED
                     self._emit_finished_once(WorkerResult(
                         success=False,
-                        error_message="?ъ슜?먭? ?묒뾽??痍⑥냼?덉뒿?덈떎.",
+                        error_message="사용자가 작업을 취소했습니다.",
                         data={"cancelled": True, "success_count": 0, "fail_count": 0},
                     ))
                     return
 
-                self.progress.emit(1, 3, "?띿뒪??異붿텧")
-                self.status_changed.emit("?띿뒪??異붿텧 以?..")
+                self.progress.emit(1, 3, "텍스트 추출")
+                self.status_changed.emit("텍스트 추출 중...")
                 diff = DocDiff()
                 result = diff.compare(self._file1, self._file2)
 
@@ -1516,7 +1512,7 @@ class DocDiffWorker(BaseWorker):
                 self.state = WorkerState.CANCELLED
                 self._emit_finished_once(WorkerResult(
                     success=False,
-                    error_message="?ъ슜?먭? ?묒뾽??痍⑥냼?덉뒿?덈떎.",
+                    error_message="사용자가 작업을 취소했습니다.",
                     data={"cancelled": True, "success_count": 0, "fail_count": 0},
                 ))
                 return
@@ -1543,7 +1539,7 @@ class DocDiffWorker(BaseWorker):
 
 
 class SmartTocWorker(BaseWorker):
-    """紐⑹감 異붿텧 ?묒뾽??"""
+    """목차 추출 작업자."""
 
     def __init__(self, file_path: str, parent=None) -> None:
         super().__init__(parent)
@@ -1553,7 +1549,7 @@ class SmartTocWorker(BaseWorker):
         from ..core.smart_toc import SmartTOC
 
         self.state = WorkerState.RUNNING
-        self.status_changed.emit("紐⑹감 異붿텧 以鍮?以?..")
+        self.status_changed.emit("목차 추출 준비 중...")
 
         try:
             with com_context():
@@ -1561,13 +1557,13 @@ class SmartTocWorker(BaseWorker):
                     self.state = WorkerState.CANCELLED
                     self._emit_finished_once(WorkerResult(
                         success=False,
-                        error_message="?ъ슜?먭? ?묒뾽??痍⑥냼?덉뒿?덈떎.",
+                        error_message="사용자가 작업을 취소했습니다.",
                         data={"cancelled": True, "success_count": 0, "fail_count": 0},
                     ))
                     return
 
-                self.progress.emit(1, 2, "遺꾩꽍")
-                self.status_changed.emit("臾몄꽌 遺꾩꽍 以?..")
+                self.progress.emit(1, 2, "분석")
+                self.status_changed.emit("문서 분석 중...")
                 toc = SmartTOC()
                 result = toc.extract_toc(self._file_path)
 
@@ -1772,7 +1768,7 @@ class ActionConsoleWorker(BaseWorker):
 
 
 class MacroRunWorker(BaseWorker):
-    """留ㅽ겕濡??ㅽ뻾 ?묒뾽??"""
+    """매크로 실행 작업자."""
 
     def __init__(self, macro_id: str, parent=None) -> None:
         super().__init__(parent)
@@ -1784,7 +1780,7 @@ class MacroRunWorker(BaseWorker):
         from datetime import datetime
 
         self.state = WorkerState.RUNNING
-        self.status_changed.emit("留ㅽ겕濡??ㅽ뻾 以鍮?以?..")
+        self.status_changed.emit("매크로 실행 준비 중...")
 
         success_count = 0
         fail_count = 0
@@ -1797,7 +1793,7 @@ class MacroRunWorker(BaseWorker):
                     self.state = WorkerState.ERROR
                     self._emit_finished_once(WorkerResult(
                         success=False,
-                        error_message="留ㅽ겕濡쒕? 李얠쓣 ???놁뒿?덈떎.",
+                        error_message="매크로를 찾을 수 없습니다.",
                         data={"cancelled": False, "success_count": 0, "fail_count": 1},
                     ))
                     return
@@ -1811,14 +1807,14 @@ class MacroRunWorker(BaseWorker):
                         self.state = WorkerState.CANCELLED
                         self._emit_finished_once(WorkerResult(
                             success=False,
-                            error_message="?ъ슜?먭? ?묒뾽??痍⑥냼?덉뒿?덈떎.",
+                            error_message="사용자가 작업을 취소했습니다.",
                             data={"cancelled": True, "success_count": 0, "fail_count": 0},
                         ))
                         return
 
                     self.progress.emit(idx, max(total, 1), action.description or action.action_type)
-                    self.status_changed.emit(f"?ㅽ뻾 以? {action.description or action.action_type}")
-                    recorder._execute_action(hwp, action)  # pyhwpx ?명솚 ?ㅽ뻾
+                    self.status_changed.emit(f"실행 중: {action.description or action.action_type}")
+                    recorder._execute_action(hwp, action)  # pyhwpx 호환 실행
 
                 macro.run_count += 1
                 macro.modified_at = datetime.now().isoformat()

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Hyperlink Page
 하이퍼링크 검사 UI 페이지
 
@@ -30,7 +30,8 @@ from ..widgets.file_list import FileListWidget
 from ..widgets.page_header import PageHeader
 from ..widgets.toast import get_toast_manager
 from ...utils.settings import get_settings_manager
-from ...core.hyperlink_checker import HyperlinkChecker
+from ...core.hyperlink_checker import HyperlinkChecker, LinkInfo, LinkStatus
+from ...utils.worker import WorkerResult
 
 
 class HyperlinkPage(QWidget):
@@ -42,7 +43,7 @@ class HyperlinkPage(QWidget):
         self._temp_dir_ctx: Optional[tempfile.TemporaryDirectory] = None
         self.worker = None
         self._settings = get_settings_manager()
-        self._links: list[tuple[str, object]] = []
+        self._links: list[tuple[str, LinkInfo]] = []
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -169,40 +170,57 @@ class HyperlinkPage(QWidget):
             self.progress.setValue(int(current / total * 100))
         self.total_label.setText(f"검사 중: {message}")
 
-    def _populate_link_table(self, links: list[tuple[str, object]]) -> None:
+    def _populate_link_table(self, links: list[tuple[str, LinkInfo]]) -> None:
         self.link_table.setUpdatesEnabled(False)
         self.link_table.setRowCount(len(links))
 
         for row, (_, link) in enumerate(links):
-            ok = getattr(link.status, "value", "") in ["valid", "local_ok"]
+            ok = link.status in (LinkStatus.VALID, LinkStatus.LOCAL_OK)
             status_text = "✅" if ok else "❌"
             status_color = "#3fb950" if ok else "#f85149"
 
             status_item = QTableWidgetItem(status_text)
             status_item.setForeground(QColor(status_color))
             self.link_table.setItem(row, 0, status_item)
-            self.link_table.setItem(row, 1, QTableWidgetItem(getattr(link, "url", "")))
-            self.link_table.setItem(row, 2, QTableWidgetItem(getattr(link, "text", "")))
-            self.link_table.setItem(row, 3, QTableWidgetItem(getattr(link, "error_message", "")))
+            self.link_table.setItem(row, 1, QTableWidgetItem(link.url))
+            self.link_table.setItem(row, 2, QTableWidgetItem(link.text))
+            self.link_table.setItem(row, 3, QTableWidgetItem(link.error_message))
 
         self.link_table.setUpdatesEnabled(True)
 
-    def _on_finished(self, result) -> None:
+    @staticmethod
+    def _coerce_links(raw_links: object) -> list[tuple[str, LinkInfo]]:
+        if not isinstance(raw_links, list):
+            return []
+
+        links: list[tuple[str, LinkInfo]] = []
+        for item in raw_links:
+            if (
+                isinstance(item, tuple)
+                and len(item) == 2
+                and isinstance(item[0], str)
+                and isinstance(item[1], LinkInfo)
+            ):
+                links.append((item[0], item[1]))
+        return links
+
+    def _on_finished(self, result: WorkerResult) -> None:
         self.progress.setVisible(False)
         self.scan_btn.setEnabled(True)
         self.export_btn.setEnabled(True)
         self._cleanup_temp_dir()
 
         if result.success:
-            links = (result.data or {}).get("links", [])
+            data = result.data if isinstance(result.data, dict) else {}
+            links = self._coerce_links(data.get("links", []))
             self._links = links
 
             total = len(links)
-            valid = sum(1 for _, l in links if getattr(l.status, "value", "") in ["valid", "local_ok"])
+            valid = sum(1 for _, link in links if link.status in (LinkStatus.VALID, LinkStatus.LOCAL_OK))
             broken = sum(
                 1
-                for _, l in links
-                if getattr(l.status, "value", "") in ["broken", "local_missing", "timeout"]
+                for _, link in links
+                if link.status in (LinkStatus.BROKEN, LinkStatus.LOCAL_MISSING, LinkStatus.TIMEOUT)
             )
 
             self.total_label.setText(f"총 링크: {total}개")

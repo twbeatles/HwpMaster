@@ -55,8 +55,7 @@ class SettingsPage(QWidget):
         layout.addWidget(page_header)
 
         # ── 🎨 외관 섹션 ──
-        appearance_group = self._create_section_group("🎨 외관", "테마와 색상을 변경합니다")
-        appearance_layout = QVBoxLayout()
+        appearance_group, appearance_layout = self._create_section_group("🎨 외관", "테마와 색상을 변경합니다")
 
         theme_row = QHBoxLayout()
         theme_label = QLabel("테마 프리셋")
@@ -71,12 +70,13 @@ class SettingsPage(QWidget):
         theme_row.addStretch()
 
         appearance_layout.addLayout(theme_row)
-        appearance_group.layout().addLayout(appearance_layout)
         layout.addWidget(appearance_group)
 
         # ── 📂 출력 섹션 ──
-        output_group = self._create_section_group("📂 출력", "변환/저장 파일의 기본 출력 위치를 지정합니다")
-        output_layout = QHBoxLayout()
+        output_group, output_layout = self._create_section_group(
+            "📂 출력",
+            "변환/저장 파일의 기본 출력 위치를 지정합니다",
+        )
 
         dir_label = QLabel("기본 출력 폴더")
         dir_label.setMinimumWidth(140)
@@ -94,15 +94,13 @@ class SettingsPage(QWidget):
         self.output_btn.setMinimumWidth(100)
         output_layout.addWidget(self.output_btn)
 
-        output_group.layout().addLayout(output_layout)
         layout.addWidget(output_group)
 
         # ── 🔗 하이퍼링크 검사 섹션 ──
-        hyperlink_group = self._create_section_group(
+        hyperlink_group, hyper_layout = self._create_section_group(
             "🔗 하이퍼링크 검사",
-            "문서 내 링크 검사 시 네트워크/프라이버시 설정을 관리합니다"
+            "문서 내 링크 검사 시 네트워크/프라이버시 설정을 관리합니다",
         )
-        hyper_layout = QVBoxLayout()
 
         # 외부 접속 체크박스
         self.hyperlink_external_checkbox = QCheckBox(
@@ -149,15 +147,13 @@ class SettingsPage(QWidget):
         hint.setWordWrap(True)
         hyper_layout.addWidget(hint)
 
-        hyperlink_group.layout().addLayout(hyper_layout)
         layout.addWidget(hyperlink_group)
 
         # ── 🔧 시스템 섹션 ──
-        system_group = self._create_section_group(
+        system_group, system_layout = self._create_section_group(
             "🔧 시스템",
-            "프로세스 관리 및 앱 정보"
+            "프로세스 관리 및 앱 정보",
         )
-        system_layout = QVBoxLayout()
 
         # 한글 프로세스 정리
         cleanup_row = QHBoxLayout()
@@ -176,7 +172,6 @@ class SettingsPage(QWidget):
         cleanup_row.addWidget(cleanup_desc, 1)
         system_layout.addLayout(cleanup_row)
 
-        system_group.layout().addLayout(system_layout)
         layout.addWidget(system_group)
 
         layout.addStretch()
@@ -191,7 +186,7 @@ class SettingsPage(QWidget):
         outer_layout.addWidget(scroll)
 
     @staticmethod
-    def _create_section_group(title: str, description: str = "") -> QGroupBox:
+    def _create_section_group(title: str, description: str = "") -> tuple[QGroupBox, QVBoxLayout]:
         """아이콘 포함 섹션 QGroupBox 생성"""
         group = QGroupBox(title)
         group.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
@@ -206,7 +201,7 @@ class SettingsPage(QWidget):
             desc_label.setWordWrap(True)
             layout.addWidget(desc_label)
 
-        return group
+        return group, layout
 
     def _cleanup_hwp_process(self) -> None:
         reply = QMessageBox.question(

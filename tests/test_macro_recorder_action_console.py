@@ -22,11 +22,16 @@ class _FakeHAction:
         self.execute_calls.append((action_id, hset))
 
 
+class _FakeParamSet:
+    def __init__(self) -> None:
+        self.HInsertText = _FakePSet()
+
+
 class _FakeHwp:
     def __init__(self) -> None:
         self.run_calls: list[str] = []
         self.HAction = _FakeHAction()
-        self.HParameterSet = type("FakeParamSet", (), {"HInsertText": _FakePSet()})()
+        self.HParameterSet = _FakeParamSet()
 
     def Run(self, action_id: str) -> None:
         self.run_calls.append(action_id)

@@ -9,9 +9,17 @@ import logging
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Protocol
 
 from .hwp_handler import HwpHandler, OperationResult
+
+
+class ActionHandler(Protocol):
+    def run_action(self, action_id: str) -> bool:
+        ...
+
+    def execute_action(self, action_id: str, pset_name: str, values: dict[str, Any]) -> bool:
+        ...
 
 
 @dataclass
@@ -242,7 +250,8 @@ class ActionRunner:
             return False
         normalized = [cmd.normalize() for cmd in commands]
         now = datetime.now().isoformat()
-        created_at = self._templates.get(template_name).created_at if template_name in self._templates else now
+        existing = self._templates.get(template_name)
+        created_at = existing.created_at if existing is not None else now
         self._templates[template_name] = ActionTemplate(
             name=template_name,
             description=description,
@@ -339,14 +348,14 @@ class ActionRunner:
         *,
         stop_on_error: bool = True,
         value_overrides: Optional[dict[str, dict[str, Any]]] = None,
-        handler: Optional[HwpHandler] = None,
+        handler: Optional[ActionHandler] = None,
     ) -> OperationResult:
         commands = self.build_builtin_preset_commands(preset_id, value_overrides=value_overrides)
         if not commands:
             return OperationResult(success=False, error=f"지원하지 않는 프리셋: {preset_id}")
         return self.run_commands(commands, stop_on_error=stop_on_error, handler=handler)
 
-    def run_action(self, action_id: str, handler: Optional[HwpHandler] = None) -> OperationResult:
+    def run_action(self, action_id: str, handler: Optional[ActionHandler] = None) -> OperationResult:
         try:
             if handler is None:
                 with HwpHandler() as owned:
@@ -362,7 +371,7 @@ class ActionRunner:
         action_id: str,
         pset_name: str,
         values: dict[str, Any],
-        handler: Optional[HwpHandler] = None,
+        handler: Optional[ActionHandler] = None,
     ) -> OperationResult:
         try:
             if handler is None:
@@ -379,7 +388,7 @@ class ActionRunner:
         commands: list[ActionCommand],
         *,
         stop_on_error: bool = True,
-        handler: Optional[HwpHandler] = None,
+        handler: Optional[ActionHandler] = None,
     ) -> OperationResult:
         warnings: list[str] = []
         changed_count = 0
@@ -387,7 +396,7 @@ class ActionRunner:
         executed: list[dict[str, Any]] = []
         succeeded_commands: list[dict[str, Any]] = []
 
-        def _run_one(h: HwpHandler, cmd: ActionCommand) -> OperationResult:
+        def _run_one(h: ActionHandler, cmd: ActionCommand) -> OperationResult:
             normalized = cmd.normalize()
             if normalized.action_type == "run":
                 return self.run_action(normalized.action_id, handler=h)
@@ -458,7 +467,7 @@ class ActionRunner:
         name: str,
         *,
         stop_on_error: bool = True,
-        handler: Optional[HwpHandler] = None,
+        handler: Optional[ActionHandler] = None,
     ) -> OperationResult:
         template = self.get_template(name)
         if template is None:

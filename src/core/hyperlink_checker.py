@@ -1,4 +1,4 @@
-﻿"""
+"""
 Hyperlink Checker Module
 HWP 문서 하이퍼링크 검사
 
@@ -265,8 +265,6 @@ class HyperlinkChecker:
                 return LinkStatus.TIMEOUT, "연결 시간 초과"
             return LinkStatus.BROKEN, str(getattr(e, "reason", e))
         except socket.timeout:
-            return LinkStatus.TIMEOUT, "연결 시간 초과"
-        except TimeoutError:
             return LinkStatus.TIMEOUT, "연결 시간 초과"
         except Exception as e:
             return LinkStatus.UNKNOWN, str(e)

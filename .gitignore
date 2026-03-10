@@ -45,6 +45,8 @@ coverage.xml
 .mypy_cache/
 .ruff_cache/
 .pyre/
+.pyright/
+.pyrightcache/
 cover/
 
 # Environments
@@ -71,6 +73,7 @@ Desktop.ini
 backup/
 logs/
 output/
+out/
 temp/
 *.log
 *.tmp

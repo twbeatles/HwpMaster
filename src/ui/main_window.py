@@ -1,4 +1,4 @@
-﻿"""
+"""
 Main Window Module
 PySide6 기반 메인 윈도우 UI
 
@@ -99,8 +99,11 @@ class Sidebar(QFrame):
         self._title_label.setStyleSheet("color: #ffffff; background: transparent;")
         title_inner.addWidget(self._title_label)
 
+        version = ""
         try:
-            version = QApplication.instance().applicationVersion() if QApplication.instance() else ""
+            app = QApplication.instance()
+            if isinstance(app, QApplication):
+                version = app.applicationVersion()
         except Exception:
             version = ""
         self._version_label = QLabel(f"v{version}" if version else f"v{APP_VERSION}")
@@ -460,7 +463,7 @@ class MainWindow(QMainWindow):
     def _apply_theme_preset(self, preset: str) -> None:
         try:
             app = QApplication.instance()
-            if app is None:
+            if not isinstance(app, QApplication):
                 return
             app.setStyleSheet(build_stylesheet(preset))
         except Exception as e:
@@ -806,27 +809,13 @@ class MainWindow(QMainWindow):
         self.set_busy(True)
         out_dir = str(Path(self._get_default_output_dir()) / "metadata_cleaned")
         options = {
-            "remove_author": bool(getattr(self.metadata_page, "remove_author_check", None).isChecked())
-            if hasattr(self.metadata_page, "remove_author_check")
-            else True,
-            "remove_comments": bool(getattr(self.metadata_page, "remove_comments_check", None).isChecked())
-            if hasattr(self.metadata_page, "remove_comments_check")
-            else True,
-            "remove_tracking": bool(getattr(self.metadata_page, "remove_tracking_check", None).isChecked())
-            if hasattr(self.metadata_page, "remove_tracking_check")
-            else True,
-            "set_distribution": bool(getattr(self.metadata_page, "set_distribution_check", None).isChecked())
-            if hasattr(self.metadata_page, "set_distribution_check")
-            else True,
-            "scan_personal_info": bool(getattr(self.metadata_page, "scan_pii_check", None).isChecked())
-            if hasattr(self.metadata_page, "scan_pii_check")
-            else False,
-            "document_password": getattr(self.metadata_page, "password_edit", None).text().strip()
-            if hasattr(self.metadata_page, "password_edit")
-            else "",
-            "strict_password": bool(getattr(self.metadata_page, "strict_password_check", None).isChecked())
-            if hasattr(self.metadata_page, "strict_password_check")
-            else False,
+            "remove_author": self.metadata_page.remove_author_check.isChecked(),
+            "remove_comments": self.metadata_page.remove_comments_check.isChecked(),
+            "remove_tracking": self.metadata_page.remove_tracking_check.isChecked(),
+            "set_distribution": self.metadata_page.set_distribution_check.isChecked(),
+            "scan_personal_info": self.metadata_page.scan_pii_check.isChecked(),
+            "document_password": self.metadata_page.password_edit.text().strip(),
+            "strict_password": self.metadata_page.strict_password_check.isChecked(),
         }
 
         self._current_worker = MetadataCleanWorker(files, output_dir=out_dir, options=options)

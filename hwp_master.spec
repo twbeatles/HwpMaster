@@ -4,7 +4,6 @@ HWP Master PyInstaller Spec File
 빌드 명령어: pyinstaller hwp_master.spec
 """
 
-import sys
 import os
 from pathlib import Path
 
@@ -22,12 +21,12 @@ datas = [
     (str(ROOT / 'assets'), 'assets'),
 ]
 
+# 실제 저장소에 존재하는 배포 문서만 번들에 포함한다.
 doc_files = [
     'README.md',
-    'PROJECT_AUDIT_PYHWPX.md',
-    'FEATURE_IMPLEMENTATION_AUDIT_2026-03-03.md',
     'CLAUDE.md',
     'GEMINI.md',
+    'LICENSE',
 ]
 
 for doc_name in doc_files:
@@ -63,7 +62,7 @@ hiddenimports = [
     'src.core.capability_mapper',
 ]
 
-# 제외할 모듈  
+# 제외할 모듈
 excludes = [
     'pandas',
     'numpy',
