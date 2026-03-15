@@ -88,15 +88,6 @@ class ActionPreset:
             "commands": [asdict(cmd) for cmd in self.commands],
         }
 
-
-class ActionHandler(Protocol):
-    """Minimal action handler contract used by ActionRunner."""
-
-    def run_action(self, action_id: str) -> bool: ...
-
-    def execute_action(self, action_id: str, pset_name: str, values: dict[str, Any]) -> bool: ...
-
-
 class ActionRunner:
     """Run pyhwpx actions with template persistence."""
 
