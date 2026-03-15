@@ -215,6 +215,8 @@ HwpMaster/
 - 사용자/프로젝트 개요: `README.md`
 - 개발 가이드: `CLAUDE.md`
 - 구현/운영 컨텍스트: `GEMINI.md`
+- 저장소 종합 감사: `PROJECT_AUDIT_PYHWPX.md`
+- 기능 구현 감사: `FEATURE_IMPLEMENTATION_AUDIT_2026-02-28.md`
 - 정적 분석 기준: `pyrightconfig.json`
 - 텍스트 인코딩 규칙: `.editorconfig`
 
@@ -240,19 +242,21 @@ HwpMaster/
 
 이 프로젝트는 [MIT License](LICENSE)를 따릅니다. 누구나 자유롭게 수정 및 배포할 수 있습니다.
 
-## 최근 업데이트 (2026-03-10)
+## 최근 업데이트 (2026-03-15)
 
-- Pylance/Pyright 정합성 정리
-  - `pyrightconfig.json` 추가 및 검사 범위를 `main.py`, `src`, `tests`로 고정
-  - Qt Optional 추론, Protocol 타입, lazy export 경고를 정리해 `pyright .` 기준 `0 errors, 0 warnings` 달성
-- 인코딩 및 문서 정리
-  - `src/utils/worker.py`, `src/core/hwp_handler.py`의 깨진 한글 문자열/주석/메시지 복구
-  - `README.md`, `CLAUDE.md`, `GEMINI.md`, `hwp_master.spec`를 현재 저장소 구조 기준으로 갱신
+- Pylance/Pyright 정합성 유지
+  - `pyright .` 기준 `0 errors, 0 warnings`
+  - `ActionRunner` protocol typing, Qt Optional narrowing, page export 정리를 반영
+- 인코딩 및 텍스트 무결성 보강
+  - `src/utils/worker.py`, `src/core/hwp_handler.py`의 한글 문자열/주석/메시지를 UTF-8 기준으로 정리
+  - `tests/test_repository_text_integrity.py`를 추가해 알려진 모지바케 조각과 UTF-8 회귀를 감시
+- 문서 및 배포 메타데이터 정리
+  - `README.md`, `CLAUDE.md`, `GEMINI.md`, `PROJECT_AUDIT_PYHWPX.md`, `FEATURE_IMPLEMENTATION_AUDIT_2026-02-28.md`를 최신 기준으로 갱신
+  - `hwp_master.spec`는 실제 존재하는 배포 문서만 조건부로 번들링
 - 저장소 운영 설정 보강
-  - `.editorconfig` 추가로 Python/Markdown/JSON 인코딩을 UTF-8로 고정
-  - `.gitignore`에 `out/`, `.pyright/`, `.pyrightcache/`를 추가해 로컬 산출물 유입 방지
+  - `.editorconfig`, `.vscode/settings.json`, `.gitignore`를 통해 UTF-8/워크스페이스 인코딩/산출물 제외 정책을 정리
 - 최신 검증 기준
-  - `pytest -q`: `72 passed, 2 skipped`
+  - `pytest -q`: `67 passed, 2 skipped`
 
 ## 최근 업데이트 (2026-02-25)
 

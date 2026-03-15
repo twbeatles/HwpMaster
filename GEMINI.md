@@ -27,6 +27,8 @@
 - `hwp_master.spec` - PyInstaller 빌드 설정
 - `pyrightconfig.json` - 정적 분석 범위와 Python 버전 기준
 - `.editorconfig` - 인코딩/줄바꿈/들여쓰기 기준
+- `PROJECT_AUDIT_PYHWPX.md` - 저장소 전반 감사 및 단계별 반영 이력
+- `FEATURE_IMPLEMENTATION_AUDIT_2026-02-28.md` - 기능 구현 감사 및 후속 정리
 - `scripts/verify_core_modules.py` - 핵심 모듈 임포트 검증
 - `scripts/perf_smoke.py` - 수동 성능 스모크 테스트
 
@@ -95,10 +97,10 @@ python scripts/perf_smoke.py
 
 ---
 
-## 🧪 현재 검증 기준 (2026-03-10)
+## 🧪 현재 검증 기준 (2026-03-15)
 
 - `pyright .` => `0 errors, 0 warnings`
-- `pytest -q` => `72 passed, 2 skipped`
+- `pytest -q` => `67 passed, 2 skipped`
 - 인코딩 정리 완료:
   - `src/utils/worker.py`
   - `src/core/hwp_handler.py`
@@ -106,6 +108,7 @@ python scripts/perf_smoke.py
   - `ActionRunner` handler 타입을 `Protocol` 기반으로 정리
   - 링크 검사 결과 타입을 `(filename, LinkInfo)`로 고정
   - `QApplication.instance()`와 Qt 레이아웃 접근의 Optional 추론 문제 해소
+  - `tests/test_repository_text_integrity.py`로 UTF-8/모지바케 회귀 방지
 
 ---
 

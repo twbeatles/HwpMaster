@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 
 from src.core.action_runner import ActionRunner, ActionCommand
 
@@ -8,13 +9,13 @@ from src.core.action_runner import ActionRunner, ActionCommand
 class _FakeHandler:
     def __init__(self) -> None:
         self.run_calls: list[str] = []
-        self.execute_calls: list[tuple[str, str, dict]] = []
+        self.execute_calls: list[tuple[str, str, dict[str, Any]]] = []
 
     def run_action(self, action_id: str) -> bool:
         self.run_calls.append(action_id)
         return action_id != "FAIL"
 
-    def execute_action(self, action_id: str, pset_name: str, values: dict) -> bool:
+    def execute_action(self, action_id: str, pset_name: str, values: dict[str, Any]) -> bool:
         self.execute_calls.append((action_id, pset_name, values))
         return action_id != "FAIL_EXEC"
 

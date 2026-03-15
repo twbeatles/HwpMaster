@@ -26,6 +26,8 @@ doc_files = [
     'README.md',
     'CLAUDE.md',
     'GEMINI.md',
+    'PROJECT_AUDIT_PYHWPX.md',
+    'FEATURE_IMPLEMENTATION_AUDIT_2026-02-28.md',
     'LICENSE',
 ]
 

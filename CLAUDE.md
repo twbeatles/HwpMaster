@@ -16,7 +16,7 @@
 - Python: **3.10+**
 - GUI: `PySide6>=6.6.0`
 - 정적 분석: `pyright .` 기준 **0 errors / 0 warnings**
-- 회귀 테스트: `pytest -q` 기준 **72 passed, 2 skipped**
+- 회귀 테스트: `pytest -q` 기준 **67 passed, 2 skipped**
 - 인코딩 규칙: `.editorconfig` 기준 `utf-8`, `lf`
 
 ---
@@ -28,6 +28,8 @@ HwpMaster/
 ├── .editorconfig
 ├── pyrightconfig.json
 ├── LICENSE
+├── PROJECT_AUDIT_PYHWPX.md
+├── FEATURE_IMPLEMENTATION_AUDIT_2026-02-28.md
 ├── main.py
 ├── hwp_master.spec
 ├── scripts/
@@ -105,16 +107,17 @@ python scripts/perf_smoke.py
 
 ---
 
-## 📌 운영 정합성 메모 (2026-03-10)
+## 📌 운영 정합성 메모 (2026-03-15)
 
 - 최신 기준:
   - `pyright .` => `0 errors, 0 warnings`
-  - `pytest -q` => `72 passed, 2 skipped`
+  - `pytest -q` => `67 passed, 2 skipped`
 - 최근 반영:
   - `pyrightconfig.json`, `.editorconfig` 추가
   - `worker.py`, `hwp_handler.py` 한글 인코딩/문구 복구
   - `ActionRunner` handler 타입을 `Protocol` 기반으로 정리
   - 링크 검사 결과 타입을 `(filename, LinkInfo)`로 고정
+  - `tests/test_repository_text_integrity.py`로 UTF-8 및 모지바케 회귀 감시 추가
 - 전역 상태 원칙 예외:
   - 전역 상태는 지양하되, 매크로 녹화는 `Action Console`과 `Macro Page` 간 세션 공유를 위해
     `MacroRecorder`의 공유 녹화 상태를 사용함

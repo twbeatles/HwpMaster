@@ -288,6 +288,8 @@ class TemplatePage(QWidget):
         # 기존 카드 제거
         while self._grid_layout.count():
             item = self._grid_layout.takeAt(0)
+            if item is None:
+                continue
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
