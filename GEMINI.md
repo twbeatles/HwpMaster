@@ -27,26 +27,25 @@
 - `hwp_master.spec` - PyInstaller 빌드 설정
 - `pyrightconfig.json` - 정적 분석 범위와 Python 버전 기준
 - `.editorconfig` - 인코딩/줄바꿈/들여쓰기 기준
-- `PROJECT_AUDIT_PYHWPX.md` - 저장소 전반 감사 및 단계별 반영 이력
-- `FEATURE_IMPLEMENTATION_AUDIT_2026-02-28.md` - 기능 구현 감사 및 후속 정리
+- `PROJECT_AUDIT_PYHWPX.md` - 저장소 전반 감사와 기능 구현 후속 정리
 - `scripts/verify_core_modules.py` - 핵심 모듈 임포트 검증
 - `scripts/perf_smoke.py` - 수동 성능 스모크 테스트
 
 ### 코어 모듈 (`src/core/`)
-- `hwp_handler.py` - HWP 파일 조작, 보안/메타데이터/액션 실행 기반
-- `action_runner.py` - 범용 `run_action` / `execute_action` 실행 및 프리셋
+- `hwp_handler/` - HWP 파일 조작 파사드와 내부 도메인 모듈
+- `action_runner/` - 범용 `run_action` / `execute_action` 실행 및 프리셋 패키지
 - `hyperlink_checker.py` - 링크 검사와 `LinkInfo` 결과 타입 정의
-- `template_store.py`, `macro_recorder.py` - 템플릿/매크로 저장소
-- `doc_diff.py`, `smart_toc.py` - 비교/목차 생성
+- `template_store/`, `macro_recorder/` - 템플릿/매크로 저장소 패키지
+- `doc_diff/`, `smart_toc.py` - 비교/목차 생성
 - `watermark_manager.py`, `header_footer_manager.py`, `bookmark_manager.py`, `image_extractor.py`
 
 ### UI 모듈 (`src/ui/`)
-- `main_window.py` - 페이지 lazy-loading, 사이드바/스택 구성
+- `main_window/` - 페이지 lazy-loading, 사이드바/스택 구성 패키지
 - `pages/` - 기능별 페이지 구현
 - `widgets/` - 재사용 가능한 공통 위젯
 
 ### 유틸리티 (`src/utils/`)
-- `worker.py` - 백그라운드 작업과 결과 집계
+- `worker/` - 백그라운드 작업과 결과 집계 패키지
 - `output_paths.py` - 출력 경로/충돌 회피 정책
 - `filename_sanitizer.py` - 안전한 파일명 생성
 - `qss_renderer.py` - 테마 토큰 기반 QSS 생성
@@ -91,24 +90,25 @@ python scripts/perf_smoke.py
 1. `src/core/`에 비즈니스 로직을 추가합니다.
 2. 필요하면 `src/core/__init__.py` export를 갱신합니다.
 3. `src/ui/pages/`에 대응 페이지를 추가합니다.
-4. `src/ui/pages/__init__.py` lazy export와 `main_window.py` 페이지 로딩을 갱신합니다.
-5. 워커가 필요하면 `src/utils/worker.py` 패턴을 재사용합니다.
+4. `src/ui/pages/__init__.py` lazy export와 `src/ui/main_window/` 페이지 로딩을 갱신합니다.
+5. 워커가 필요하면 `src/utils/worker/` 패턴을 재사용합니다.
 6. `pyright .`와 `pytest -q`를 통과시킨 뒤 문서를 업데이트합니다.
 
 ---
 
-## 🧪 현재 검증 기준 (2026-03-15)
+## 🧪 현재 검증 기준 (2026-03-18)
 
 - `pyright .` => `0 errors, 0 warnings`
-- `pytest -q` => `67 passed, 2 skipped`
+- `pytest -q` => `76 passed, 2 skipped`
 - 인코딩 정리 완료:
-  - `src/utils/worker.py`
-  - `src/core/hwp_handler.py`
+  - `src/utils/worker/__init__.py`
+  - `src/core/hwp_handler/__init__.py`
 - 최신 정합성 반영:
   - `ActionRunner` handler 타입을 `Protocol` 기반으로 정리
   - 링크 검사 결과 타입을 `(filename, LinkInfo)`로 고정
   - `QApplication.instance()`와 Qt 레이아웃 접근의 Optional 추론 문제 해소
   - `tests/test_repository_text_integrity.py`로 UTF-8/모지바케 회귀 방지
+  - `tests/test_same_path_package_facades.py`로 same-path package facade 회귀 방지
 
 ---
 

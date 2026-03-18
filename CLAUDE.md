@@ -16,7 +16,7 @@
 - Python: **3.10+**
 - GUI: `PySide6>=6.6.0`
 - 정적 분석: `pyright .` 기준 **0 errors / 0 warnings**
-- 회귀 테스트: `pytest -q` 기준 **67 passed, 2 skipped**
+- 회귀 테스트: `pytest -q` 기준 **76 passed, 2 skipped**
 - 인코딩 규칙: `.editorconfig` 기준 `utf-8`, `lf`
 
 ---
@@ -29,7 +29,6 @@ HwpMaster/
 ├── pyrightconfig.json
 ├── LICENSE
 ├── PROJECT_AUDIT_PYHWPX.md
-├── FEATURE_IMPLEMENTATION_AUDIT_2026-02-28.md
 ├── main.py
 ├── hwp_master.spec
 ├── scripts/
@@ -41,7 +40,7 @@ HwpMaster/
 ├── src/
 │   ├── core/
 │   ├── ui/
-│   │   ├── main_window.py
+│   │   ├── main_window/
 │   │   ├── pages/
 │   │   └── widgets/
 │   └── utils/
@@ -49,7 +48,7 @@ HwpMaster/
 │       ├── output_paths.py
 │       ├── qss_renderer.py
 │       ├── version.py
-│       └── worker.py
+│       └── worker/
 └── tests/
 ```
 
@@ -70,7 +69,7 @@ HwpMaster/
 
 ### UI / 워커
 - 새 기능은 `src/core/`와 `src/ui/pages/`를 함께 추가하고, 메인 윈도우 lazy-loading 경로까지 연결합니다.
-- 백그라운드 작업은 `src/utils/worker.py` 패턴을 따르고, 성공/실패 판정은 결과 집계와 동일한 기준으로 맞춥니다.
+- 백그라운드 작업은 `src/utils/worker/` 패턴을 따르고, 성공/실패 판정은 결과 집계와 동일한 기준으로 맞춥니다.
 
 ---
 
@@ -102,22 +101,23 @@ python scripts/perf_smoke.py
 - [ ] 타입 힌트와 docstring을 추가했다.
 - [ ] `pyright .`가 깨지지 않는다.
 - [ ] `pytest -q`가 기존 기준을 유지한다.
-- [ ] 새 페이지/모듈이면 `__init__.py`와 `main_window.py` 연결을 반영했다.
+- [ ] 새 페이지/모듈이면 `__init__.py`와 `src/ui/main_window/` 연결을 반영했다.
 - [ ] 로그/오류 메시지/주석의 한국어 표현을 통일했다.
 
 ---
 
-## 📌 운영 정합성 메모 (2026-03-15)
+## 📌 운영 정합성 메모 (2026-03-18)
 
 - 최신 기준:
   - `pyright .` => `0 errors, 0 warnings`
-  - `pytest -q` => `67 passed, 2 skipped`
+  - `pytest -q` => `76 passed, 2 skipped`
 - 최근 반영:
   - `pyrightconfig.json`, `.editorconfig` 추가
-  - `worker.py`, `hwp_handler.py` 한글 인코딩/문구 복구
+  - `worker/`, `hwp_handler/` 한글 인코딩/문구 복구
   - `ActionRunner` handler 타입을 `Protocol` 기반으로 정리
   - 링크 검사 결과 타입을 `(filename, LinkInfo)`로 고정
   - `tests/test_repository_text_integrity.py`로 UTF-8 및 모지바케 회귀 감시 추가
+  - same-path package facade 리팩토링과 `tests/test_same_path_package_facades.py` 추가
 - 전역 상태 원칙 예외:
   - 전역 상태는 지양하되, 매크로 녹화는 `Action Console`과 `Macro Page` 간 세션 공유를 위해
     `MacroRecorder`의 공유 녹화 상태를 사용함

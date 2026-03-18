@@ -334,6 +334,12 @@ class TableDoctor:
                     tables_found=table_count,
                     tables_fixed=fixed_count
                 )
+
+            return TableDoctorResult(
+                success=False,
+                file_path=file_path,
+                error_message="표 스타일 적용이 완료되지 않았습니다.",
+            )
                 
         except Exception as e:
             return TableDoctorResult(

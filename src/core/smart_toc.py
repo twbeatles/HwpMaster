@@ -200,6 +200,13 @@ class SmartTOC:
                     entries=entries,
                     analysis_mode=analysis_mode,
                 )
+
+            return TocResult(
+                success=False,
+                file_path=file_path,
+                error_message="목차 추출이 완료되지 않았습니다.",
+                analysis_mode="pattern_only",
+            )
                 
         except Exception as e:
             return TocResult(
@@ -436,6 +443,8 @@ class SmartTOC:
                 
                 hwp.save_as(output_path)
                 return True
+
+            return False
                 
         except Exception as e:
             self._logger.error(f"목차 삽입 오류: {e}")

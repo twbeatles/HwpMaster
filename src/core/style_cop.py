@@ -304,6 +304,12 @@ class StyleCop:
                     file_path=save_path,
                     paragraphs_modified=1  # 전체 적용
                 )
+
+            return StyleApplyResult(
+                success=False,
+                file_path=file_path,
+                error_message="스타일 적용이 완료되지 않았습니다.",
+            )
                 
         except Exception as e:
             return StyleApplyResult(

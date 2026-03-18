@@ -147,16 +147,16 @@ HwpMaster/
 │       └── style.qss          # 레거시/폴백 스타일시트
 ├── src/
 │   ├── core/                  # 핵심 비즈니스 로직
-│   │   ├── hwp_handler.py     # HWP 제어 (pyhwpx)
-│   │   ├── action_runner.py   # 범용 Run/Execute 액션 실행기
+│   │   ├── hwp_handler/       # HWP 제어 파사드 + 내부 도메인 모듈
+│   │   ├── action_runner/     # 범용 Run/Execute 액션 실행기 패키지
 │   │   ├── capability_mapper.py # pyhwpx 커버리지/능력 매핑
 │   │   ├── excel_handler.py   # Excel 처리 (openpyxl)
-│   │   ├── template_store.py  # 템플릿 관리
-│   │   ├── macro_recorder.py  # 매크로 기록/재생
+│   │   ├── template_store/    # 템플릿 저장소 패키지
+│   │   ├── macro_recorder/    # 매크로 기록/재생 패키지
 │   │   ├── regex_replacer.py  # 정규식 치환
 │   │   ├── style_cop.py       # 서식 교정
 │   │   ├── table_doctor.py    # 표 스타일 수정
-│   │   ├── doc_diff.py        # 문서 비교
+│   │   ├── doc_diff/          # 문서 비교 패키지
 │   │   ├── smart_toc.py       # 목차 생성
 │   │   ├── watermark_manager.py   # 워터마크 관리
 │   │   ├── header_footer_manager.py # 헤더/푸터 관리
@@ -164,7 +164,7 @@ HwpMaster/
 │   │   ├── hyperlink_checker.py   # 링크 검사
 │   │   └── image_extractor.py     # 이미지 추출
 │   ├── ui/                    # 사용자 인터페이스
-│   │   ├── main_window.py     # 메인 윈도우 프레임
+│   │   ├── main_window/       # 메인 윈도우 파사드 + 내부 서브모듈
 │   │   ├── pages/             # 기능별 페이지
 │   │   │   ├── home_page.py        # 홈 대시보드
 │   │   │   ├── convert_page.py     # 변환
@@ -197,7 +197,7 @@ HwpMaster/
 │   └── utils/                 # 유틸리티
 │       ├── com_init.py        # COM 초기화 컨텍스트
 │       ├── filename_sanitizer.py # 안전한 출력 파일명 정리
-│       ├── worker.py          # 백그라운드 작업 (QThread)
+│       ├── worker/            # 백그라운드 작업 패키지 (QThread)
 │       ├── logger.py          # 로깅 시스템
 │       ├── output_paths.py    # 출력 경로/충돌 회피 정책
 │       ├── qss_renderer.py    # 테마 토큰 기반 QSS 렌더링
@@ -215,8 +215,7 @@ HwpMaster/
 - 사용자/프로젝트 개요: `README.md`
 - 개발 가이드: `CLAUDE.md`
 - 구현/운영 컨텍스트: `GEMINI.md`
-- 저장소 종합 감사: `PROJECT_AUDIT_PYHWPX.md`
-- 기능 구현 감사: `FEATURE_IMPLEMENTATION_AUDIT_2026-02-28.md`
+- 저장소 종합 감사 및 기능 구현 후속 정리: `PROJECT_AUDIT_PYHWPX.md`
 - 정적 분석 기준: `pyrightconfig.json`
 - 텍스트 인코딩 규칙: `.editorconfig`
 
@@ -242,21 +241,25 @@ HwpMaster/
 
 이 프로젝트는 [MIT License](LICENSE)를 따릅니다. 누구나 자유롭게 수정 및 배포할 수 있습니다.
 
-## 최근 업데이트 (2026-03-15)
+## 최근 업데이트 (2026-03-18)
 
 - Pylance/Pyright 정합성 유지
   - `pyright .` 기준 `0 errors, 0 warnings`
   - `ActionRunner` protocol typing, Qt Optional narrowing, page export 정리를 반영
+- 같은 import 경로 유지형 패키지 리팩토링
+  - `src.core.hwp_handler`, `src.core.action_runner`, `src.core.doc_diff`
+  - `src.core.template_store`, `src.core.macro_recorder`
+  - `src.utils.worker`, `src.ui.main_window`
 - 인코딩 및 텍스트 무결성 보강
-  - `src/utils/worker.py`, `src/core/hwp_handler.py`의 한글 문자열/주석/메시지를 UTF-8 기준으로 정리
+  - `src/utils/worker/`, `src/core/hwp_handler/`의 한글 문자열/주석/메시지를 UTF-8 기준으로 정리
   - `tests/test_repository_text_integrity.py`를 추가해 알려진 모지바케 조각과 UTF-8 회귀를 감시
 - 문서 및 배포 메타데이터 정리
-  - `README.md`, `CLAUDE.md`, `GEMINI.md`, `PROJECT_AUDIT_PYHWPX.md`, `FEATURE_IMPLEMENTATION_AUDIT_2026-02-28.md`를 최신 기준으로 갱신
+  - `README.md`, `CLAUDE.md`, `GEMINI.md`, `PROJECT_AUDIT_PYHWPX.md`를 최신 기준으로 갱신
   - `hwp_master.spec`는 실제 존재하는 배포 문서만 조건부로 번들링
 - 저장소 운영 설정 보강
   - `.editorconfig`, `.vscode/settings.json`, `.gitignore`를 통해 UTF-8/워크스페이스 인코딩/산출물 제외 정책을 정리
 - 최신 검증 기준
-  - `pytest -q`: `67 passed, 2 skipped`
+  - `pytest -q`: `76 passed, 2 skipped`
 
 ## 최근 업데이트 (2026-02-25)
 

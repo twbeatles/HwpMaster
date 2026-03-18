@@ -1,7 +1,7 @@
 # HWP Master pyhwpx 확장 프로젝트 감사 보고서
 
 작성일: 2026-02-25  
-최종 업데이트: 2026-03-15  
+최종 업데이트: 2026-03-18  
 기준 환경: Windows + 한글(HWP) 설치 환경, `pyhwpx 1.6.6`
 
 ## 1. 문서 목적
@@ -15,9 +15,9 @@
 | 영역 | 핵심 파일 | 역할 |
 |---|---|---|
 | 앱 진입 / 패키징 | `main.py`, `hwp_master.spec` | 앱 시작, 스타일 초기화, PyInstaller 배포 설정 |
-| Core | `src/core/hwp_handler.py`, `action_runner.py`, `capability_mapper.py` | HWP 제어, 범용 액션 실행, pyhwpx 기능 매핑 |
-| UI | `src/ui/main_window.py`, `src/ui/pages/*` | 기능별 페이지 lazy-loading, 대시보드/설정/고급 콘솔 |
-| Worker / Utils | `src/utils/worker.py`, `output_paths.py`, `filename_sanitizer.py` | 백그라운드 실행, 저장 정책, 충돌 회피 |
+| Core | `src/core/hwp_handler/`, `action_runner/`, `capability_mapper.py` | HWP 제어, 범용 액션 실행, pyhwpx 기능 매핑 |
+| UI | `src/ui/main_window/`, `src/ui/pages/*` | 기능별 페이지 lazy-loading, 대시보드/설정/고급 콘솔 |
+| Worker / Utils | `src/utils/worker/`, `output_paths.py`, `filename_sanitizer.py` | 백그라운드 실행, 저장 정책, 충돌 회피 |
 | 품질 / 문서 | `tests/*`, `README.md`, `CLAUDE.md`, `GEMINI.md` | 회귀 테스트, 개발 가이드, 운영 메모 |
 
 ## 3. 감사 결과 반영 현황
@@ -43,9 +43,13 @@
   - 매크로 ID 충돌 방지
 - 2026-03-15 정합성 마감
   - `pyright .` 기준 `0 errors, 0 warnings`
-  - `worker.py`, `hwp_handler.py` 한글 문자열과 주석의 UTF-8 정리
+  - `worker/`, `hwp_handler/` 한글 문자열과 주석의 UTF-8 정리
   - `tests/test_repository_text_integrity.py` 추가
   - README/감사 문서/`.spec`/워크스페이스 설정 동기화
+- 2026-03-18 구조 분할 리팩토링
+  - 같은 import 경로 유지형 패키지 전환: `hwp_handler`, `action_runner`, `doc_diff`, `template_store`, `macro_recorder`, `worker`, `main_window`
+  - 루트 파사드 + 내부 책임 모듈 구조로 분리
+  - import/monkeypatch 호환 회귀 테스트 추가
 
 ### 남아 있는 운영상 주의점
 
@@ -67,18 +71,18 @@ pyright .
 pytest -q
 python -X utf8 - <<'PY'
 from pathlib import Path
-for path in [Path("main.py"), Path("src/core/hwp_handler.py"), Path("src/utils/worker.py")]:
+for path in [Path("main.py"), Path("src/core/hwp_handler/__init__.py"), Path("src/utils/worker/__init__.py")]:
     path.read_text(encoding="utf-8")
 print("UTF-8 OK")
 PY
 ```
 
 - 정적 분석: `0 errors, 0 warnings`
-- 회귀 테스트: `67 passed, 2 skipped`
+- 회귀 테스트: `76 passed, 2 skipped`
 - 텍스트 무결성: `tests/test_repository_text_integrity.py` 통과
 
 ## 6. 권장 후속 조치
 
 - 배포 후보마다 `pyinstaller hwp_master.spec` 실빌드와 실행 스모크 테스트를 수행한다.
 - Windows + 한글 설치 환경에서 실문서 기반 smoke test를 주기적으로 돌린다.
-- 테스트 기준선이나 저장 정책이 바뀌면 README와 두 감사 문서를 같은 커밋에서 함께 갱신한다.
+- 테스트 기준선이나 저장 정책이 바뀌면 README와 핵심 운영 문서를 같은 커밋에서 함께 갱신한다.
