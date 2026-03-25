@@ -9,6 +9,7 @@ import logging
 import os
 import zipfile
 import tempfile
+import html
 from pathlib import Path
 from typing import Optional, Any, Callable
 from dataclasses import dataclass, field
@@ -61,6 +62,9 @@ class TocResult:
     entries: list[TocEntry] = field(default_factory=list)
     error_message: Optional[str] = None
     analysis_mode: str = "pattern_only"
+    style_hint_total: int = 0
+    style_hint_matched: int = 0
+    style_hint_missed: int = 0
     
     @property
     def total_entries(self) -> int:
@@ -78,16 +82,25 @@ class TocResult:
     
     def to_html(self) -> str:
         """HTML 형식 목차"""
-        html = """<div style="font-family: 'Malgun Gothic', sans-serif;">
-<h2>목 차</h2>
-<ul style="list-style: none; padding: 0;">
-"""
+        rows = [
+            "<div style=\"font-family: 'Malgun Gothic', sans-serif;\">",
+            "<h2>목 차</h2>",
+            "<table style=\"border-collapse: collapse; width: 100%;\">",
+            "<thead><tr><th style=\"text-align:left; border-bottom:1px solid #ccc; padding:8px;\">제목</th>"
+            "<th style=\"text-align:right; border-bottom:1px solid #ccc; padding:8px; width:80px;\">페이지</th></tr></thead>",
+            "<tbody>",
+        ]
         for entry in self.entries:
-            indent = entry.level * 20
-            html += f'<li style="margin-left: {indent}px; margin-bottom: 5px;">{entry.text}</li>\n'
-        
-        html += "</ul></div>"
-        return html
+            indent = max(0, (entry.level - 1) * 24)
+            rows.append(
+                "<tr>"
+                f"<td style=\"padding:8px; padding-left:{indent + 8}px;\">{html.escape(entry.text)}</td>"
+                f"<td style=\"padding:8px; text-align:right;\">{entry.page if entry.page > 0 else ''}</td>"
+                "</tr>"
+            )
+
+        rows.extend(["</tbody>", "</table>", "</div>"])
+        return "\n".join(rows)
 
 
 class SmartTOC:
@@ -166,7 +179,15 @@ class SmartTOC:
                     )
 
                 page_lines = self._split_text_pages(full_text)
-                style_hints, analysis_mode = self._extract_style_hints_from_hwpx(file_path)
+                style_hints, style_hint_total, style_hint_matched, style_hint_missed = self._extract_style_hints_from_hwpx(
+                    file_path,
+                    page_lines,
+                )
+                analysis_mode = (
+                    "pattern_plus_style_hint"
+                    if style_hint_total > 0 and style_hint_matched > 0
+                    else "pattern_only"
+                )
                 total_lines = len(page_lines)
 
                 for idx, (line_number, page_number, line) in enumerate(page_lines, start=1):
@@ -199,6 +220,9 @@ class SmartTOC:
                     file_path=file_path,
                     entries=entries,
                     analysis_mode=analysis_mode,
+                    style_hint_total=style_hint_total,
+                    style_hint_matched=style_hint_matched,
+                    style_hint_missed=style_hint_missed,
                 )
 
             return TocResult(
@@ -236,13 +260,57 @@ class SmartTOC:
 
         return rows
 
-    def _extract_style_hints_from_hwpx(self, file_path: str) -> tuple[dict[int, tuple[float, bool]], str]:
+    def _normalize_match_text(self, text: str) -> str:
+        return " ".join(
+            str(text or "")
+            .replace("\r", " ")
+            .replace("\n", " ")
+            .replace("\t", " ")
+            .split()
+        ).strip()
+
+    def _extract_paragraph_text(self, para: ElementTree.Element) -> str:
+        return self._normalize_match_text("".join(para.itertext()))
+
+    def _align_style_hints_to_lines(
+        self,
+        page_lines: list[tuple[int, int, str]],
+        candidates: list[tuple[str, float, bool]],
+    ) -> tuple[dict[int, tuple[float, bool]], int, int, int]:
+        hints: dict[int, tuple[float, bool]] = {}
+        if not candidates:
+            return hints, 0, 0, 0
+
+        candidate_index = 0
+        total = len(candidates)
+
+        for line_number, _page_number, line in page_lines:
+            if candidate_index >= total:
+                break
+
+            normalized_line = self._normalize_match_text(line)
+            if not normalized_line:
+                continue
+
+            candidate_text, font_size, is_bold = candidates[candidate_index]
+            if normalized_line == candidate_text:
+                hints[line_number] = (font_size, is_bold)
+                candidate_index += 1
+
+        matched = len(hints)
+        missed = max(0, total - matched)
+        return hints, total, matched, missed
+
+    def _extract_style_hints_from_hwpx(
+        self,
+        file_path: str,
+        page_lines: list[tuple[int, int, str]],
+    ) -> tuple[dict[int, tuple[float, bool]], int, int, int]:
         """
         Best-effort style hint extraction from HWPX.
         Returns:
-            ({line_number: (font_size, is_bold)}, analysis_mode)
+            ({line_number: (font_size, is_bold)}, total, matched, missed)
         """
-        hints: dict[int, tuple[float, bool]] = {}
         hwpx_path = Path(file_path)
         temp_hwpx: Optional[Path] = None
 
@@ -262,10 +330,11 @@ class SmartTOC:
                     hwpx_path = temp_hwpx
 
             if not hwpx_path.exists() or not zipfile.is_zipfile(hwpx_path):
-                return {}, "pattern_only"
+                return {}, 0, 0, 0
 
             with zipfile.ZipFile(hwpx_path, "r") as zf:
                 style_ids: set[str] = set()
+                candidates: list[tuple[str, float, bool]] = []
                 header_name = "Contents/header.xml"
                 if header_name in zf.namelist():
                     try:
@@ -286,15 +355,14 @@ class SmartTOC:
                                 if style_id:
                                     style_ids.add(style_id)
                     except Exception:
-                        return {}, "pattern_only"
+                        return {}, 0, 0, 0
 
                 if not style_ids:
-                    return {}, "pattern_only"
+                    return {}, 0, 0, 0
 
                 section_names = sorted(
                     [n for n in zf.namelist() if n.startswith("Contents/section") and n.endswith(".xml")]
                 )
-                line_idx = 0
                 for name in section_names:
                     try:
                         section_root = ElementTree.fromstring(zf.read(name))
@@ -303,7 +371,6 @@ class SmartTOC:
                     for para in section_root.iter():
                         if self._local_name(para.tag).lower() != "p":
                             continue
-                        line_idx += 1
                         style_ref = ""
                         for key, value in para.attrib.items():
                             lowered = key.lower()
@@ -311,13 +378,13 @@ class SmartTOC:
                                 style_ref = str(value)
                                 break
                         if style_ref and style_ref in style_ids:
-                            hints[line_idx] = (16.0, True)
+                            para_text = self._extract_paragraph_text(para)
+                            if para_text:
+                                candidates.append((para_text, 16.0, True))
 
-            if hints:
-                return hints, "pattern_plus_style_hint"
-            return {}, "pattern_only"
+            return self._align_style_hints_to_lines(page_lines, candidates)
         except Exception:
-            return {}, "pattern_only"
+            return {}, 0, 0, 0
         finally:
             if temp_hwpx is not None:
                 try:
@@ -433,7 +500,7 @@ class SmartTOC:
                     
                     # 목차 항목 삽입 (pyhwpx 호환 방식)
                     for entry in result.entries:
-                        toc_line = entry.format(include_page=False) + "\r\n"
+                        toc_line = entry.format(include_page=True) + "\r\n"
                         hwp.HAction.GetDefault("InsertText", hwp.HParameterSet.HInsertText.HSet)
                         hwp.HParameterSet.HInsertText.Text = toc_line
                         hwp.HAction.Execute("InsertText", hwp.HParameterSet.HInsertText.HSet)

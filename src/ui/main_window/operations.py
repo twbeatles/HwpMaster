@@ -6,7 +6,9 @@ from typing import Any
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
+from ...utils.history_manager import TaskType
 from ...utils.qss_renderer import build_stylesheet
+from ...utils.task_tracking import record_task_result, track_recent_files
 from ...utils.worker import (
     ConversionWorker,
     DataInjectWorker,
@@ -15,6 +17,13 @@ from ...utils.worker import (
     SplitWorker,
     WorkerResult,
 )
+
+
+def _bind_recent_file_tracking(window: Any, page: Any) -> None:
+    file_list = getattr(page, "file_list", None)
+    if file_list is None or not hasattr(file_list, "files_changed"):
+        return
+    file_list.files_changed.connect(lambda files, _window=window: track_recent_files(files, settings=_window._settings))
 
 
 def sync_settings_page(window: Any) -> None:
@@ -85,6 +94,10 @@ def cancel_current_worker(window: Any) -> None:
 
 
 def connect_signals(window: Any) -> None:
+    _bind_recent_file_tracking(window, window.convert_page)
+    _bind_recent_file_tracking(window, window.merge_split_page)
+    _bind_recent_file_tracking(window, window.metadata_page)
+
     window.convert_page.convert_btn.clicked.connect(window._on_convert)
     window.convert_page.output_btn.clicked.connect(window._select_output_dir)
     window.convert_page.progress_card.cancelled.connect(window._cancel_current_worker)
@@ -133,6 +146,8 @@ def on_page_changed(window: Any, index: int) -> None:
         return
     window._ensure_page_loaded(index)
     window.page_stack.setCurrentIndex(index)
+    if index == 0:
+        window.home_page.refresh_panels()
 
 
 def on_convert(window: Any) -> None:
@@ -170,10 +185,26 @@ def on_convert(window: Any) -> None:
 def on_convert_finished(window: Any, result: WorkerResult) -> None:
     window.set_busy(False)
     window.convert_page.convert_btn.setEnabled(True)
+    files = window.convert_page.file_list.get_files()
+    target_format = "PDF"
+    for btn in window.convert_page.format_buttons:
+        if btn.isChecked():
+            target_format = btn.text()
+            break
     if result.data and result.data.get("cancelled"):
         window.convert_page.progress_card.set_error("작업이 취소되었습니다.")
         QMessageBox.information(window, "취소", "변환 작업이 취소되었습니다.")
         return
+
+    record_task_result(
+        TaskType.CONVERT,
+        f"{target_format} 변환",
+        files,
+        result,
+        options={"target_format": target_format},
+        settings=window._settings,
+        history_manager=window._history,
+    )
 
     if result.success:
         data = result.data or {}
@@ -214,6 +245,7 @@ def on_merge_split(window: Any) -> None:
             window.merge_split_page.progress_card.setVisible(False)
             return
 
+        window._pending_merge_output_path = output_path
         window.set_busy(True)
         window._current_worker = MergeWorker(files, output_path)
         window._current_worker.progress.connect(lambda c, t, n: window.merge_split_page.progress_card.set_count(c, t))
@@ -250,10 +282,22 @@ def on_merge_split(window: Any) -> None:
 def on_merge_finished(window: Any, result: WorkerResult) -> None:
     window.set_busy(False)
     window.merge_split_page.execute_btn.setEnabled(True)
+    files = window.merge_split_page.file_list.get_files()
     if result.data and result.data.get("cancelled"):
         window.merge_split_page.progress_card.set_error("작업이 취소되었습니다.")
         QMessageBox.information(window, "취소", "병합 작업이 취소되었습니다.")
         return
+
+    record_task_result(
+        TaskType.MERGE,
+        "문서 병합",
+        files,
+        result,
+        options={"output_path": getattr(window, "_pending_merge_output_path", "")},
+        settings=window._settings,
+        history_manager=window._history,
+        recent_files=[getattr(window, "_pending_merge_output_path", "")],
+    )
 
     if result.success:
         window.merge_split_page.progress_card.set_completed(1, 0)
@@ -266,10 +310,21 @@ def on_merge_finished(window: Any, result: WorkerResult) -> None:
 def on_split_finished(window: Any, result: WorkerResult) -> None:
     window.set_busy(False)
     window.merge_split_page.execute_btn.setEnabled(True)
+    files = window.merge_split_page.file_list.get_files()
     if result.data and result.data.get("cancelled"):
         window.merge_split_page.progress_card.set_error("작업이 취소되었습니다.")
         QMessageBox.information(window, "취소", "분할 작업이 취소되었습니다.")
         return
+
+    record_task_result(
+        TaskType.SPLIT,
+        "문서 분할",
+        files,
+        result,
+        options={"page_ranges": window.merge_split_page.get_page_ranges()},
+        settings=window._settings,
+        history_manager=window._history,
+    )
 
     if result.success:
         data = result.data or {}
@@ -296,6 +351,7 @@ def select_template(window: Any) -> None:
     if file_path:
         window.data_inject_page.template_label.setText(file_path)
         window.data_inject_page.template_label.setStyleSheet("color: #e8e8e8;")
+        track_recent_files([file_path], settings=window._settings)
 
 
 def select_data_file(window: Any) -> None:
@@ -308,6 +364,7 @@ def select_data_file(window: Any) -> None:
     if file_path:
         window.data_inject_page.data_label.setText(file_path)
         window.data_inject_page.data_label.setStyleSheet("color: #e8e8e8;")
+        track_recent_files([file_path], settings=window._settings)
 
 
 def on_inject(window: Any) -> None:
@@ -363,10 +420,30 @@ def on_inject(window: Any) -> None:
 def on_inject_finished(window: Any, result: WorkerResult) -> None:
     window.set_busy(False)
     window.data_inject_page.execute_btn.setEnabled(True)
+    template = window.data_inject_page.template_label.text()
+    data_file = window.data_inject_page.data_label.text()
+    tracked_files = [path for path in [template, data_file] if "선택된 파일 없음" not in str(path)]
     if result.data and result.data.get("cancelled"):
         window.data_inject_page.progress_card.set_error("작업이 취소되었습니다.")
         QMessageBox.information(window, "취소", "데이터 주입 작업이 취소되었습니다.")
         return
+
+    record_task_result(
+        TaskType.DATA_INJECT,
+        "데이터 주입",
+        tracked_files,
+        result,
+        options={
+            "filename_field": getattr(window.data_inject_page, "filename_field_edit", None).text().strip()
+            if hasattr(window.data_inject_page, "filename_field_edit")
+            else "",
+            "filename_template": getattr(window.data_inject_page, "filename_template_edit", None).text().strip()
+            if hasattr(window.data_inject_page, "filename_template_edit")
+            else "",
+        },
+        settings=window._settings,
+        history_manager=window._history,
+    )
 
     if result.success:
         data = result.data or {}
@@ -421,10 +498,28 @@ def on_clean_metadata(window: Any) -> None:
 def on_metadata_finished(window: Any, result: WorkerResult) -> None:
     window.set_busy(False)
     window.metadata_page.execute_btn.setEnabled(True)
+    files = window.metadata_page.file_list.get_files()
     if result.data and result.data.get("cancelled"):
         window.metadata_page.progress_card.set_error("작업이 취소되었습니다.")
         QMessageBox.information(window, "취소", "메타정보 정리 작업이 취소되었습니다.")
         return
+
+    record_task_result(
+        TaskType.METADATA,
+        "메타정보 정리",
+        files,
+        result,
+        options={
+            "remove_author": window.metadata_page.remove_author_check.isChecked(),
+            "remove_comments": window.metadata_page.remove_comments_check.isChecked(),
+            "remove_tracking": window.metadata_page.remove_tracking_check.isChecked(),
+            "set_distribution": window.metadata_page.set_distribution_check.isChecked(),
+            "scan_personal_info": window.metadata_page.scan_pii_check.isChecked(),
+            "strict_password": window.metadata_page.strict_password_check.isChecked(),
+        },
+        settings=window._settings,
+        history_manager=window._history,
+    )
 
     if result.success:
         data = result.data or {}

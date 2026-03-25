@@ -16,7 +16,7 @@
 - Python: **3.10+**
 - GUI: `PySide6>=6.6.0`
 - 정적 분석: `pyright .` 기준 **0 errors / 0 warnings**
-- 회귀 테스트: `pytest -q` 기준 **76 passed, 2 skipped**
+- 회귀 테스트: `pytest -q` 기준 **89 passed, 2 skipped**
 - 인코딩 규칙: `.editorconfig` 기준 `utf-8`, `lf`
 
 ---
@@ -44,9 +44,12 @@ HwpMaster/
 │   │   ├── pages/
 │   │   └── widgets/
 │   └── utils/
+│       ├── atomic_write.py
 │       ├── com_init.py
+│       ├── history_manager.py
 │       ├── output_paths.py
 │       ├── qss_renderer.py
+│       ├── task_tracking.py
 │       ├── version.py
 │       └── worker/
 └── tests/
@@ -66,10 +69,12 @@ HwpMaster/
 - 하드코딩된 문자열 경로 대신 `Path`를 사용합니다.
 - 출력 경로 정책은 `src/utils/output_paths.py`로 통일합니다.
 - 파일명 정리는 `src/utils/filename_sanitizer.py`를 우선 사용합니다.
+- 설정/히스토리/템플릿/매크로 메타데이터 저장은 `src/utils/atomic_write.py` 헬퍼를 우선 사용합니다.
 
 ### UI / 워커
 - 새 기능은 `src/core/`와 `src/ui/pages/`를 함께 추가하고, 메인 윈도우 lazy-loading 경로까지 연결합니다.
 - 백그라운드 작업은 `src/utils/worker/` 패턴을 따르고, 성공/실패 판정은 결과 집계와 동일한 기준으로 맞춥니다.
+- 작업 완료 후 최근 파일과 홈 대시보드 히스토리 갱신은 `src/utils/task_tracking.py` 헬퍼로 통일합니다.
 
 ---
 
@@ -106,12 +111,17 @@ python scripts/perf_smoke.py
 
 ---
 
-## 📌 운영 정합성 메모 (2026-03-18)
+## 📌 운영 정합성 메모 (2026-03-25)
 
 - 최신 기준:
   - `pyright .` => `0 errors, 0 warnings`
-  - `pytest -q` => `76 passed, 2 skipped`
+  - `pytest -q` => `89 passed, 2 skipped`
 - 최근 반영:
+  - `atomic_write.py` 추가 후 settings/history/action-template/template-store/macro 저장 경로를 원자적 쓰기로 통일
+  - `task_tracking.py` 추가 후 최근 파일/작업 히스토리 기록 로직을 공통화
+  - 홈 페이지에 최근 작업/즐겨찾기 패널을 배치하고 메인 윈도우 설정 인스턴스와 연결
+  - 템플릿 출력 확장자 정책을 원본 템플릿 suffix와 일치하도록 강제
+  - Smart TOC HTML 출력의 escape/page-number 표시와 style-hint 정렬 통계를 보강
   - `pyrightconfig.json`, `.editorconfig` 추가
   - `worker/`, `hwp_handler/` 한글 인코딩/문구 복구
   - `ActionRunner` handler 타입을 `Protocol` 기반으로 정리

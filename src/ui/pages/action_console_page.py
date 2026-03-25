@@ -25,6 +25,9 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.action_runner import ActionRunner, ActionCommand
+from ...utils.history_manager import TaskType
+from ...utils.settings import get_settings_manager
+from ...utils.task_tracking import record_task_result, track_recent_files
 from ..widgets.page_header import PageHeader
 from ..widgets.progress_card import ProgressCard
 from ..widgets.toast import get_toast_manager
@@ -37,6 +40,7 @@ class ActionConsolePage(QWidget):
         super().__init__(parent)
         self._runner = ActionRunner()
         self._worker = None
+        self._settings = get_settings_manager()
         self._setup_ui()
         self._reload_templates()
         self._reload_builtin_presets()
@@ -200,11 +204,12 @@ class ActionConsolePage(QWidget):
         path, _ = QFileDialog.getOpenFileName(
             self,
             "대상 문서 선택",
-            "",
+            self._settings.get("default_output_dir", ""),
             "HWP 파일 (*.hwp *.hwpx)",
         )
         if path:
             self.source_path_edit.setText(path)
+            track_recent_files([path], settings=self._settings)
 
     @Slot()
     def _on_select_output_path(self) -> None:
@@ -359,6 +364,21 @@ class ActionConsolePage(QWidget):
         changed_count = int(data.get("changed_count", 0))
         warnings = data.get("warnings", [])
         artifacts = data.get("artifacts", {})
+        source_path = self.source_path_edit.text().strip()
+        saved_path = str(artifacts.get("saved_path", "") or "").strip()
+
+        record_task_result(
+            TaskType.ACTION_CONSOLE,
+            "액션 콘솔 실행",
+            [source_path] if source_path else [],
+            result,
+            options={
+                "save_mode": str(artifacts.get("save_mode", "") or ""),
+                "changed_count": changed_count,
+            },
+            settings=self._settings,
+            recent_files=[saved_path or source_path],
+        )
 
         if result.success:
             self.progress_card.set_completed(success_count, fail_count)

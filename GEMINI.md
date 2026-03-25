@@ -46,10 +46,12 @@
 
 ### 유틸리티 (`src/utils/`)
 - `worker/` - 백그라운드 작업과 결과 집계 패키지
+- `atomic_write.py` - 설정/메타데이터 원자적 저장
 - `output_paths.py` - 출력 경로/충돌 회피 정책
 - `filename_sanitizer.py` - 안전한 파일명 생성
 - `qss_renderer.py` - 테마 토큰 기반 QSS 생성
 - `com_init.py` - COM 초기화 보조
+- `task_tracking.py` - 최근 파일/작업 이력 기록 헬퍼
 - `version.py`, `settings.py`, `theme_manager.py`, `logger.py`, `history_manager.py`
 
 ---
@@ -62,6 +64,8 @@
 3. 워커 결과 타입은 UI까지 동일한 구조로 전달합니다.
 4. 저장 경로와 충돌 회피 로직은 공통 유틸리티를 재사용합니다.
 5. 로그, 오류 메시지, docstring은 UTF-8 한국어 기준으로 정리합니다.
+6. 설정/히스토리/매크로/템플릿 메타데이터 쓰기는 `atomic_write.py` 기반으로 유지합니다.
+7. 홈 대시보드에 노출되는 최근 파일/작업 이력 갱신은 `task_tracking.py`를 재사용합니다.
 
 ### 금지 사항
 1. ❌ Pandas/NumPy 추가
@@ -96,14 +100,19 @@ python scripts/perf_smoke.py
 
 ---
 
-## 🧪 현재 검증 기준 (2026-03-18)
+## 🧪 현재 검증 기준 (2026-03-25)
 
 - `pyright .` => `0 errors, 0 warnings`
-- `pytest -q` => `76 passed, 2 skipped`
+- `pytest -q` => `89 passed, 2 skipped`
 - 인코딩 정리 완료:
   - `src/utils/worker/__init__.py`
   - `src/core/hwp_handler/__init__.py`
 - 최신 정합성 반영:
+  - `atomic_write.py`를 통해 settings/history/action-template/template-store/macro 저장을 원자적으로 처리
+  - `task_tracking.py`로 최근 파일/작업 히스토리 갱신 로직을 통일
+  - 홈 페이지에 최근 작업/즐겨찾기 패널을 추가하고 동일 config dir의 히스토리를 재사용
+  - 템플릿 출력 확장자를 원본 suffix와 일치시키고 필드 입력 기반 생성 흐름을 명시
+  - Smart TOC HTML 출력의 escape/page 번호 표기와 style-hint 정렬 통계를 보강
   - `ActionRunner` handler 타입을 `Protocol` 기반으로 정리
   - 링크 검사 결과 타입을 `(filename, LinkInfo)`로 고정
   - `QApplication.instance()`와 Qt 레이아웃 접근의 Optional 추론 문제 해소

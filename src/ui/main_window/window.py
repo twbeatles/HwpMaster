@@ -11,6 +11,7 @@ from ..pages.home_page import HomePage
 from ..pages.merge_split_page import MergeSplitPage
 from ..pages.metadata_page import MetadataPage
 from ..pages.settings_page import SettingsPage
+from ...utils.history_manager import get_history_manager
 from ...utils.worker import WorkerResult
 from .operations import (
     apply_theme_preset,
@@ -49,6 +50,7 @@ class MainWindow(QMainWindow):
         import src.ui.main_window as main_window_pkg
 
         self._settings = main_window_pkg.get_settings_manager()
+        self._history = get_history_manager(config_dir=self._settings.config_dir)
 
         self.setWindowTitle("HWP Master")
         self.setMinimumSize(1200, 800)
@@ -76,7 +78,7 @@ class MainWindow(QMainWindow):
         self._lazy_loaded: set[int] = set()
         self._lazy_signal_bound: set[int] = set()
 
-        self.home_page = HomePage()
+        self.home_page = HomePage(settings_manager=self._settings, history_manager=self._history)
         self.home_page.card_clicked.connect(self._on_page_changed)
         self.convert_page = ConvertPage()
         self.merge_split_page = MergeSplitPage()

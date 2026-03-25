@@ -13,7 +13,11 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtGui import QFont
 
+from ...utils.history_manager import HistoryManager
+from ...utils.settings import SettingsManager
 from ..widgets.feature_card import FeatureCard
+from ..widgets.favorites_panel import FavoritesPanel
+from ..widgets.history_panel import HistoryPanel
 from ..widgets.page_header import SectionHeader
 
 
@@ -51,8 +55,16 @@ class HomePage(QWidget):
         ]),
     ]
     
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(
+        self,
+        parent: Optional[QWidget] = None,
+        *,
+        settings_manager: Optional[SettingsManager] = None,
+        history_manager: Optional[HistoryManager] = None,
+    ) -> None:
         super().__init__(parent)
+        self._settings_manager = settings_manager
+        self._history_manager = history_manager
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -109,6 +121,17 @@ class HomePage(QWidget):
         layout.addSpacing(32)
         layout.addWidget(hero)
         layout.addSpacing(32)
+
+        panel_row = QHBoxLayout()
+        panel_row.setSpacing(16)
+
+        self.history_panel = HistoryPanel(history_manager=self._history_manager)
+        self.favorites_panel = FavoritesPanel(settings_manager=self._settings_manager)
+        panel_row.addWidget(self.history_panel, 2)
+        panel_row.addWidget(self.favorites_panel, 1)
+
+        layout.addLayout(panel_row)
+        layout.addSpacing(32)
         
         # ── 카테고리별 카드 그리드 ──
         for section_name, cards in self.SECTIONS:
@@ -149,3 +172,7 @@ class HomePage(QWidget):
         
         scroll.setWidget(content)
         outer_layout.addWidget(scroll)
+
+    def refresh_panels(self) -> None:
+        self.history_panel.refresh()
+        self.favorites_panel.refresh()

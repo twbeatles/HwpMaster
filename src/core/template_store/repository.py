@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from ...utils.atomic_write import atomic_write_json
 from .catalog import BUILTIN_TEMPLATES
 from .models import TemplateInfo
 
@@ -36,8 +37,7 @@ def save_metadata(store: Any) -> None:
         "version": "1.0",
         "templates": [template.to_dict() for template in store._templates.values()],
     }
-    with open(store._metadata_file, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    atomic_write_json(store._metadata_file, data, ensure_ascii=False, indent=2)
 
 
 def init_builtin_templates(store: Any) -> None:

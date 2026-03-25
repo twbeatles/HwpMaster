@@ -72,6 +72,8 @@ ehthumbs.db
 Desktop.ini
 
 # Project specific
+.hwp_master/
+.pytest_tmp/
 backup/
 logs/
 output/

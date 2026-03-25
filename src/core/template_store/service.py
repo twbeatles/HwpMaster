@@ -86,6 +86,24 @@ def increment_usage(store: Any, template_id: str) -> None:
         store._save_metadata()
 
 
+def _resolve_output_path(template: TemplateInfo, output_path: str) -> Path:
+    source = Path(template.file_path)
+    source_suffix = source.suffix
+    if not source_suffix:
+        raise ValueError("원본 템플릿 확장자를 확인할 수 없습니다.")
+
+    dest = Path(output_path)
+    if not dest.suffix:
+        dest = dest.with_suffix(source_suffix)
+
+    if dest.suffix.lower() != source_suffix.lower():
+        raise ValueError(
+            f"출력 파일 확장자는 원본 템플릿과 같아야 합니다: {source_suffix}"
+        )
+
+    return dest
+
+
 def use_template(store: Any, template_id: str, output_path: str) -> Optional[str]:
     template = store._templates.get(template_id)
     if not template:
@@ -104,7 +122,7 @@ def use_template(store: Any, template_id: str, output_path: str) -> Optional[str
         store._logger.warning(f"템플릿 파일이 존재하지 않습니다: {template.file_path}")
         return None
 
-    dest = Path(output_path)
+    dest = _resolve_output_path(template, output_path)
     shutil.copy2(source, dest)
     store.increment_usage(template_id)
     return str(dest)
@@ -120,11 +138,13 @@ def create_from_template(
     if not template or not template.file_path:
         return None
 
+    dest = _resolve_output_path(template, output_path)
+
     try:
         from src.core.hwp_handler import HwpHandler
 
         with HwpHandler() as handler:
-            result = handler.inject_data(template.file_path, data, output_path)
+            result = handler.inject_data(template.file_path, data, str(dest))
 
             if result.success:
                 store.increment_usage(template_id)

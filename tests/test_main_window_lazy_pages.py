@@ -58,3 +58,7 @@ class TestMainWindowLazyPages(unittest.TestCase):
         self.assertTrue(self.window.sidebar.is_collapsed)
         checked = [b.text() for b in self.window.convert_page.format_buttons if b.isChecked()]
         self.assertEqual(checked, ["HWPX"])
+
+    def test_home_page_contains_history_and_favorites_panels(self) -> None:
+        self.assertIsNotNone(self.window.home_page.history_panel)
+        self.assertIsNotNone(self.window.home_page.favorites_panel)

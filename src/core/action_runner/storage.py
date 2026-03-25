@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from typing import Any, Optional
 
+from ...utils.atomic_write import atomic_write_text
 from .models import ActionCommand, ActionTemplate
 
 
@@ -24,9 +25,9 @@ def load_templates(runner: Any) -> None:
 
 def save_templates(runner: Any) -> None:
     payload = {"version": "1.0", "templates": [tpl.to_dict() for tpl in runner._templates.values()]}
-    runner._template_file.write_text(
+    atomic_write_text(
+        runner._template_file,
         json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
     )
 
 

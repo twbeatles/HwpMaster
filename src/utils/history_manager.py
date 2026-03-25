@@ -13,6 +13,8 @@ from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from enum import Enum
 
+from .atomic_write import atomic_write_json
+
 
 class TaskType(Enum):
     """작업 유형"""
@@ -31,6 +33,9 @@ class TaskType(Enum):
     TABLE = "표 수정"
     DIFF = "문서 비교"
     TOC = "목차 생성"
+    TEMPLATE = "템플릿 생성"
+    MACRO = "매크로 실행"
+    ACTION_CONSOLE = "액션 콘솔"
 
 
 @dataclass
@@ -84,9 +89,8 @@ class HistoryManager:
     def save(self) -> None:
         """히스토리 저장"""
         try:
-            with open(self._history_file, "w", encoding="utf-8") as f:
-                data = [asdict(item) for item in self._history]
-                json.dump(data, f, indent=2, ensure_ascii=False)
+            data = [asdict(item) for item in self._history]
+            atomic_write_json(self._history_file, data, ensure_ascii=False, indent=2)
         except Exception as e:
             self._logger.warning(f"history.json 저장 실패: {self._history_file} ({e})")
     
@@ -149,12 +153,14 @@ class HistoryManager:
 
 
 # 싱글톤
-_history_manager: Optional[HistoryManager] = None
+_history_managers: dict[str, HistoryManager] = {}
 
 
-def get_history_manager() -> HistoryManager:
+def get_history_manager(config_dir: Optional[str] = None) -> HistoryManager:
     """히스토리 관리자 인스턴스 반환"""
-    global _history_manager
-    if _history_manager is None:
-        _history_manager = HistoryManager()
-    return _history_manager
+    key = str(Path(config_dir)) if config_dir else str(Path.home() / ".hwp_master")
+    manager = _history_managers.get(key)
+    if manager is None:
+        manager = HistoryManager(config_dir=config_dir)
+        _history_managers[key] = manager
+    return manager

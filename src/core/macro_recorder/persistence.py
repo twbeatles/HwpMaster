@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, Optional
 
+from ...utils.atomic_write import atomic_write_json, atomic_write_text
 from .models import MacroAction, MacroInfo
 
 
@@ -27,8 +28,7 @@ def save_macros(recorder: Any) -> None:
         "version": "1.0",
         "macros": [macro.to_dict() for macro in recorder._macros.values()],
     }
-    with open(recorder._metadata_file, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    atomic_write_json(recorder._metadata_file, data, ensure_ascii=False, indent=2)
 
 
 def start_recording(recorder: Any) -> None:
@@ -88,8 +88,7 @@ def save_macro(
     recorder._save_macros()
 
     script_path = recorder._base_dir / f"{macro_id}.py"
-    with open(script_path, "w", encoding="utf-8") as f:
-        f.write(macro.to_python_script())
+    atomic_write_text(script_path, macro.to_python_script())
 
     return macro
 
@@ -141,8 +140,7 @@ def export_macro(recorder: Any, macro_id: str, output_path: str) -> bool:
         return False
 
     try:
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(macro.to_python_script())
+        atomic_write_text(output_path, macro.to_python_script())
         return True
     except Exception as e:
         recorder._logger.warning(f"매크로 스크립트 저장 실패: {e}")

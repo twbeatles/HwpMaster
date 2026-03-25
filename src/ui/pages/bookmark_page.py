@@ -26,7 +26,9 @@ from ..widgets.file_list import FileListWidget
 from ..widgets.progress_card import ProgressCard
 from ..widgets.page_header import PageHeader
 from ..widgets.toast import get_toast_manager
+from ...utils.history_manager import TaskType
 from ...utils.settings import get_settings_manager
+from ...utils.task_tracking import record_task_result
 
 
 class BookmarkPage(QWidget):
@@ -122,6 +124,9 @@ class BookmarkPage(QWidget):
     ) -> None:
         from ...utils.worker import BookmarkWorker
 
+        self._current_task_mode = mode
+        self._current_task_files = list(files)
+        self._current_selected_count = sum(len(v) for v in (selected_map or {}).values())
         self.worker = BookmarkWorker(mode, files, output_dir, selected_map=selected_map)
         self.progress_card.setVisible(True)
         self.progress_card.reset()
@@ -274,6 +279,24 @@ class BookmarkPage(QWidget):
         if data.get("cancelled"):
             self.progress_card.set_error("작업이 취소되었습니다.")
             return
+
+        descriptions = {
+            "extract": "북마크 추출",
+            "export": "북마크 내보내기",
+            "delete": "북마크 전체 삭제",
+            "delete_selected": "북마크 선택 삭제",
+        }
+        record_task_result(
+            TaskType.BOOKMARK,
+            descriptions.get(mode, "북마크 작업"),
+            getattr(self, "_current_task_files", self.file_list.get_files()),
+            result,
+            options={
+                "mode": mode,
+                "selected_count": getattr(self, "_current_selected_count", 0),
+            },
+            settings=self._settings,
+        )
 
         if result.success:
             count = data.get("success_count", 0)

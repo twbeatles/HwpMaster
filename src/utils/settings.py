@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Optional, Any
 from dataclasses import dataclass, asdict, field
 
+from .atomic_write import atomic_write_json
+
 
 @dataclass
 class AppSettings:
@@ -105,6 +107,10 @@ class SettingsManager:
     def settings(self) -> AppSettings:
         return self._settings
 
+    @property
+    def config_dir(self) -> str:
+        return str(self._config_dir)
+
     def load(self) -> None:
         """설정 불러오기"""
         if self._config_file.exists():
@@ -119,8 +125,7 @@ class SettingsManager:
     def _write_settings(self) -> None:
         try:
             self._config_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._config_file, "w", encoding="utf-8") as f:
-                json.dump(self._settings.to_dict(), f, indent=2, ensure_ascii=False)
+            atomic_write_json(self._config_file, self._settings.to_dict(), ensure_ascii=False, indent=2)
         except Exception as e:
             self._logger.warning(f"settings.json 저장 실패: {self._config_file} ({e})")
 

@@ -19,7 +19,25 @@ from PySide6.QtGui import QFont
 
 from ...core.template_store import TemplateStore, TemplateInfo
 from ..widgets.page_header import PageHeader
+from ...utils.history_manager import TaskType
 from ...utils.settings import get_settings_manager
+from ...utils.task_tracking import record_task_summary
+
+
+def _template_output_suffix(template: TemplateInfo) -> str:
+    suffix = Path(template.file_path).suffix if template.file_path else ""
+    return suffix or ".hwp"
+
+
+def _template_output_filter(template: TemplateInfo) -> str:
+    suffix = _template_output_suffix(template).lower()
+    if suffix == ".hwpx":
+        return "HWPX 파일 (*.hwpx)"
+    return "HWP 파일 (*.hwp)"
+
+
+def _template_output_path(template: TemplateInfo, base_dir: str) -> str:
+    return str(Path(base_dir) / f"{template.name}{_template_output_suffix(template)}")
 
 
 class TemplateCard(QFrame):
@@ -214,6 +232,50 @@ class AddTemplateDialog(QDialog):
         }
 
 
+class TemplateFieldDialog(QDialog):
+    """템플릿 필드 입력 다이얼로그."""
+
+    def __init__(self, template: TemplateInfo, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._template = template
+        self._field_edits: dict[str, QLineEdit] = {}
+        self.setWindowTitle(f"{template.name} 입력값")
+        self.setMinimumWidth(420)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(16)
+
+        guide = QLabel("템플릿 필드 값을 입력하세요. 빈 값은 빈 문자열로 처리됩니다.")
+        guide.setWordWrap(True)
+        guide.setStyleSheet("color: #888888;")
+        layout.addWidget(guide)
+
+        form = QFormLayout()
+        for field_name in template.fields:
+            edit = QLineEdit()
+            edit.setPlaceholderText(field_name)
+            self._field_edits[field_name] = edit
+            form.addRow(f"{field_name}:", edit)
+        layout.addLayout(form)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        cancel_btn = QPushButton("취소")
+        cancel_btn.setProperty("class", "secondary")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+
+        ok_btn = QPushButton("생성")
+        ok_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(ok_btn)
+
+        layout.addLayout(btn_layout)
+
+    def get_data(self) -> dict[str, str]:
+        return {name: edit.text() for name, edit in self._field_edits.items()}
+
+
 class TemplatePage(QWidget):
     """템플릿 스토어 페이지"""
     
@@ -335,6 +397,12 @@ class TemplatePage(QWidget):
         """카테고리 변경"""
         self._current_category = category
         self._load_templates()
+
+    def _prompt_template_fields(self, template: TemplateInfo) -> Optional[dict[str, str]]:
+        dialog = TemplateFieldDialog(template, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialog.get_data()
     
     def _on_template_clicked(self, template_id: str) -> None:
         """템플릿 클릭"""
@@ -371,15 +439,41 @@ class TemplatePage(QWidget):
             file_path, _ = QFileDialog.getSaveFileName(
                 self,
                 "저장 위치 선택",
-                str(Path(self._settings.get("default_output_dir", str(Path.home() / "Documents"))) / f"{template.name}.hwp"),
-                "HWP 파일 (*.hwp)"
+                _template_output_path(
+                    template,
+                    self._settings.get("default_output_dir", str(Path.home() / "Documents")),
+                ),
+                _template_output_filter(template),
             )
             
             if file_path:
                 try:
-                    result = self._store.use_template(template_id, file_path)
+                    creation_mode = "copy"
+                    if template.fields:
+                        field_values = self._prompt_template_fields(template)
+                        if field_values is None:
+                            return
+                        creation_mode = "field_injection"
+                        result = self._store.create_from_template(template_id, field_values, file_path)
+                    else:
+                        result = self._store.use_template(template_id, file_path)
+
                     if result:
                         self.template_selected.emit(template_id, template.to_dict())
+                        record_task_summary(
+                            TaskType.TEMPLATE,
+                            f"템플릿 생성: {template.name}",
+                            [result],
+                            success_count=1,
+                            fail_count=0,
+                            options={
+                                "template_id": template.id,
+                                "template_name": template.name,
+                                "mode": creation_mode,
+                            },
+                            settings=self._settings,
+                            recent_files=[result],
+                        )
                         QMessageBox.information(
                             self,
                             "완료",

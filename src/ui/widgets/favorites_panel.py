@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
-from ...utils.settings import get_settings_manager
+from ...utils.settings import SettingsManager, get_settings_manager
 
 
 class FavoritesPanel(QWidget):
@@ -21,8 +21,14 @@ class FavoritesPanel(QWidget):
     
     folder_selected = Signal(str)
     
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(
+        self,
+        parent: Optional[QWidget] = None,
+        *,
+        settings_manager: Optional[SettingsManager] = None,
+    ) -> None:
         super().__init__(parent)
+        self._settings = settings_manager or get_settings_manager()
         self._setup_ui()
         self._load_favorites()
     
@@ -60,8 +66,7 @@ class FavoritesPanel(QWidget):
         """즐겨찾기 로드"""
         self.list_widget.clear()
         
-        settings = get_settings_manager()
-        favorites = settings.get("favorite_folders", [])
+        favorites = self._settings.get("favorite_folders", [])
         
         if not favorites:
             # 기본 폴더
@@ -83,12 +88,11 @@ class FavoritesPanel(QWidget):
         """폴더 추가"""
         folder = QFileDialog.getExistingDirectory(self, "폴더 추가")
         if folder:
-            settings = get_settings_manager()
-            favorites = settings.get("favorite_folders", [])
+            favorites = self._settings.get("favorite_folders", [])
             
             if folder not in favorites:
                 favorites.append(folder)
-                settings.set("favorite_folders", favorites)
+                self._settings.set("favorite_folders", favorites)
                 self._add_folder_item(folder)
     
     def _on_item_clicked(self, item: QListWidgetItem) -> None:
@@ -103,11 +107,10 @@ class FavoritesPanel(QWidget):
         if item:
             folder = item.data(Qt.ItemDataRole.UserRole)
             # 삭제 기능
-            settings = get_settings_manager()
-            favorites = settings.get("favorite_folders", [])
+            favorites = self._settings.get("favorite_folders", [])
             if folder in favorites:
                 favorites.remove(folder)
-                settings.set("favorite_folders", favorites)
+                self._settings.set("favorite_folders", favorites)
             self.list_widget.takeItem(self.list_widget.row(item))
     
     def refresh(self) -> None:

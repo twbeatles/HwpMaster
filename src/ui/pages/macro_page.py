@@ -19,10 +19,12 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QColor
 
 from ...core.macro_recorder import MacroRecorder, MacroInfo, MacroAction
+from ...utils.history_manager import TaskType
 from ..widgets.progress_card import ProgressCard
 from ..widgets.page_header import PageHeader
 from ...utils.worker import MacroRunWorker, WorkerResult
 from ...utils.settings import get_settings_manager
+from ...utils.task_tracking import record_task_result, track_recent_files
 
 
 class MacroListItem(QListWidgetItem):
@@ -514,6 +516,8 @@ class MacroPage(QWidget):
             self.run_btn.setEnabled(False)
             self.export_btn.setEnabled(False)
             self.delete_btn.setEnabled(False)
+            self._running_macro_id = macro.id
+            self._running_macro_name = macro.name
 
             self._worker = MacroRunWorker(macro.id)
             self.progress_card.cancelled.connect(self._worker.cancel)
@@ -532,6 +536,18 @@ class MacroPage(QWidget):
         if data.get("cancelled"):
             self.progress_card.set_error("작업이 취소되었습니다.")
             return
+
+        record_task_result(
+            TaskType.MACRO,
+            f"매크로 실행: {getattr(self, '_running_macro_name', '') or '매크로'}",
+            [],
+            result,
+            options={
+                "macro_id": getattr(self, "_running_macro_id", ""),
+                "macro_name": getattr(self, "_running_macro_name", ""),
+            },
+            settings=self._settings,
+        )
 
         if result.success:
             self.progress_card.set_completed(1, 0)
@@ -564,6 +580,7 @@ class MacroPage(QWidget):
         
         if file_path:
             if self._recorder.export_macro(macro.id, file_path):
+                track_recent_files([file_path], settings=self._settings)
                 QMessageBox.information(self, "완료", f"스크립트가 저장되었습니다:\n{file_path}")
             else:
                 QMessageBox.warning(self, "오류", "스크립트 저장에 실패했습니다.")

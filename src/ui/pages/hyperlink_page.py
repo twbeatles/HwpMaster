@@ -29,7 +29,9 @@ from PySide6.QtGui import QColor
 from ..widgets.file_list import FileListWidget
 from ..widgets.page_header import PageHeader
 from ..widgets.toast import get_toast_manager
+from ...utils.history_manager import TaskType
 from ...utils.settings import get_settings_manager
+from ...utils.task_tracking import record_task_result, track_recent_files
 from ...core.hyperlink_checker import HyperlinkChecker, LinkInfo, LinkStatus
 from ...utils.worker import WorkerResult
 
@@ -164,6 +166,7 @@ class HyperlinkPage(QWidget):
         self.worker.finished_with_result.connect(self._on_finished)
         self.worker.error_occurred.connect(self._on_error)
         self.worker.start()
+        track_recent_files(files, settings=self._settings)
 
     def _on_progress(self, current: int, total: int, message: str) -> None:
         if total > 0:
@@ -209,6 +212,18 @@ class HyperlinkPage(QWidget):
         self.scan_btn.setEnabled(True)
         self.export_btn.setEnabled(True)
         self._cleanup_temp_dir()
+
+        record_task_result(
+            TaskType.HYPERLINK,
+            "링크 검사",
+            self.file_list.get_files(),
+            result,
+            options={
+                "external_requests_enabled": bool(self._settings.get("hyperlink_external_requests_enabled", True)),
+                "timeout_sec": int(self._settings.get("hyperlink_timeout_sec", 5)),
+            },
+            settings=self._settings,
+        )
 
         if result.success:
             data = result.data if isinstance(result.data, dict) else {}
@@ -273,6 +288,7 @@ class HyperlinkPage(QWidget):
                 ok = checker.export_links_to_excel(self._links, file_path)
                 if not ok:
                     raise RuntimeError("엑셀 저장 실패")
+                track_recent_files([file_path], settings=self._settings)
                 get_toast_manager().success(f"엑셀 저장 완료: {file_path}")
                 return
 
@@ -305,6 +321,7 @@ class HyperlinkPage(QWidget):
 
                 f.write("</table></body></html>")
 
+            track_recent_files([file_path], settings=self._settings)
             get_toast_manager().success(f"리포트 저장 완료: {file_path}")
         except Exception as e:
             get_toast_manager().error(f"저장 실패: {e}")

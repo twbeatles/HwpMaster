@@ -44,6 +44,9 @@ hiddenimports = [
     'pyhwpx',
     'win32com.client',
     'pythoncom',
+    # Persistence/task-tracking helpers used across settings/history and lazy pages
+    'src.utils.atomic_write',
+    'src.utils.task_tracking',
     # Lazy-loaded pages (importlib in main_window)
     'src.ui.pages.template_page',
     'src.ui.pages.macro_page',

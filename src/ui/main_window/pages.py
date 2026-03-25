@@ -5,6 +5,8 @@ from typing import Any
 
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
+from ...utils.task_tracking import track_recent_files
+
 
 TOTAL_PAGE_COUNT = 19
 LAZY_PAGE_SPECS: dict[int, tuple[str, str, str]] = {
@@ -82,4 +84,7 @@ def ensure_page_loaded(window: Any, index: int) -> None:
 def bind_lazy_page_signals(window: Any, index: int, page: QWidget) -> None:
     if index in window._lazy_signal_bound:
         return
+    file_list = getattr(page, "file_list", None)
+    if file_list is not None and hasattr(file_list, "files_changed"):
+        file_list.files_changed.connect(lambda files, _window=window: track_recent_files(files, settings=_window._settings))
     window._lazy_signal_bound.add(index)

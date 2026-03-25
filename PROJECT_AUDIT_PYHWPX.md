@@ -1,7 +1,7 @@
 # HWP Master pyhwpx 확장 프로젝트 감사 보고서
 
 작성일: 2026-02-25  
-최종 업데이트: 2026-03-18  
+최종 업데이트: 2026-03-25  
 기준 환경: Windows + 한글(HWP) 설치 환경, `pyhwpx 1.6.6`
 
 ## 1. 문서 목적
@@ -17,7 +17,7 @@
 | 앱 진입 / 패키징 | `main.py`, `hwp_master.spec` | 앱 시작, 스타일 초기화, PyInstaller 배포 설정 |
 | Core | `src/core/hwp_handler/`, `action_runner/`, `capability_mapper.py` | HWP 제어, 범용 액션 실행, pyhwpx 기능 매핑 |
 | UI | `src/ui/main_window/`, `src/ui/pages/*` | 기능별 페이지 lazy-loading, 대시보드/설정/고급 콘솔 |
-| Worker / Utils | `src/utils/worker/`, `output_paths.py`, `filename_sanitizer.py` | 백그라운드 실행, 저장 정책, 충돌 회피 |
+| Worker / Utils | `src/utils/worker/`, `output_paths.py`, `atomic_write.py`, `task_tracking.py` | 백그라운드 실행, 저장 정책, 원자적 저장, 최근 작업 추적 |
 | 품질 / 문서 | `tests/*`, `README.md`, `CLAUDE.md`, `GEMINI.md` | 회귀 테스트, 개발 가이드, 운영 메모 |
 
 ## 3. 감사 결과 반영 현황
@@ -50,6 +50,12 @@
   - 같은 import 경로 유지형 패키지 전환: `hwp_handler`, `action_runner`, `doc_diff`, `template_store`, `macro_recorder`, `worker`, `main_window`
   - 루트 파사드 + 내부 책임 모듈 구조로 분리
   - import/monkeypatch 호환 회귀 테스트 추가
+- 2026-03-25 저장/대시보드 후속 정리
+  - `atomic_write.py`를 도입해 settings/history/action-template/template-store/macro 저장 경로를 원자적 쓰기로 통일
+  - `task_tracking.py`를 도입해 최근 파일/작업 히스토리 기록을 공통화
+  - 홈 대시보드에 최근 작업/즐겨찾기 패널을 추가하고 같은 config dir 기준 히스토리를 재사용
+  - 템플릿 생성 시 출력 확장자를 원본 템플릿 suffix와 일치시키고, 필드 입력이 있는 경우 별도 입력 다이얼로그로 생성
+  - Smart TOC HTML escape/page-number 표기와 style-hint 정렬 통계를 보강
 
 ### 남아 있는 운영상 주의점
 
@@ -78,7 +84,7 @@ PY
 ```
 
 - 정적 분석: `0 errors, 0 warnings`
-- 회귀 테스트: `76 passed, 2 skipped`
+- 회귀 테스트: `89 passed, 2 skipped`
 - 텍스트 무결성: `tests/test_repository_text_integrity.py` 통과
 
 ## 6. 권장 후속 조치
@@ -86,3 +92,4 @@ PY
 - 배포 후보마다 `pyinstaller hwp_master.spec` 실빌드와 실행 스모크 테스트를 수행한다.
 - Windows + 한글 설치 환경에서 실문서 기반 smoke test를 주기적으로 돌린다.
 - 테스트 기준선이나 저장 정책이 바뀌면 README와 핵심 운영 문서를 같은 커밋에서 함께 갱신한다.
+- 홈 대시보드의 최근 작업/즐겨찾기 UX는 설정/히스토리 파일 포맷 변경과 함께 검증한다.

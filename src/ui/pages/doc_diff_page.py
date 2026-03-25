@@ -17,10 +17,12 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
 from ...core.doc_diff import DocDiff, ChangeType
+from ...utils.history_manager import TaskType
 from ..widgets.progress_card import ProgressCard
 from ..widgets.page_header import PageHeader
 from ...utils.worker import DocDiffWorker, WorkerResult
 from ...utils.settings import get_settings_manager
+from ...utils.task_tracking import record_task_result, track_recent_files
 
 
 class DocDiffPage(QWidget):
@@ -150,6 +152,7 @@ class DocDiffPage(QWidget):
             self._file1_path = file_path
             self.file1_label.setText(f"✅ {Path(file_path).name}")
             self.file1_label.setStyleSheet("color: #28a745; padding: 20px;")
+            track_recent_files([file_path], settings=self._settings)
     
     def _select_file2(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
@@ -162,6 +165,7 @@ class DocDiffPage(QWidget):
             self._file2_path = file_path
             self.file2_label.setText(f"✅ {Path(file_path).name}")
             self.file2_label.setStyleSheet("color: #28a745; padding: 20px;")
+            track_recent_files([file_path], settings=self._settings)
     
     def _compare(self) -> None:
         if not self._file1_path or not self._file2_path:
@@ -199,6 +203,15 @@ class DocDiffPage(QWidget):
 
         diff_result = data.get("result")
         self._last_result = diff_result
+
+        record_task_result(
+            TaskType.DIFF,
+            "문서 비교",
+            [self._file1_path, self._file2_path],
+            result,
+            options={"changes": len(getattr(diff_result, "changes", []) or [])},
+            settings=self._settings,
+        )
 
         if not result.success or diff_result is None or not getattr(diff_result, "success", False):
             self.progress_card.set_error(getattr(diff_result, "error_message", None) or result.error_message or "오류 발생")
@@ -257,6 +270,7 @@ class DocDiffPage(QWidget):
         if file_path:
             fmt = "html" if file_path.endswith(".html") else "txt"
             if self._doc_diff.generate_report(self._last_result, file_path, fmt):
+                track_recent_files([file_path], settings=self._settings)
                 QMessageBox.information(self, "완료", f"리포트가 저장되었습니다:\n{file_path}")
             else:
                 QMessageBox.warning(self, "오류", "리포트 저장에 실패했습니다.")

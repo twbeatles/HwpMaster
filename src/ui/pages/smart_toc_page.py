@@ -18,10 +18,12 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
 from ...core.smart_toc import SmartTOC, TocEntry
+from ...utils.history_manager import TaskType
 from ..widgets.progress_card import ProgressCard
 from ..widgets.page_header import PageHeader
 from ...utils.worker import SmartTocWorker, WorkerResult
 from ...utils.settings import get_settings_manager
+from ...utils.task_tracking import record_task_result, track_recent_files
 
 
 class SmartTocPage(QWidget):
@@ -122,6 +124,7 @@ class SmartTocPage(QWidget):
             self._file_path = file_path
             self.file_label.setText(f"✅ {Path(file_path).name}")
             self.file_label.setStyleSheet("color: #28a745;")
+            track_recent_files([file_path], settings=self._settings)
     
     def _extract_toc(self) -> None:
         if not self._file_path:
@@ -161,6 +164,15 @@ class SmartTocPage(QWidget):
         toc_result = data.get("result")
         self._last_result = toc_result
 
+        record_task_result(
+            TaskType.TOC,
+            "목차 생성",
+            [self._file_path] if self._file_path else [],
+            result,
+            options={"analysis_mode": getattr(toc_result, "analysis_mode", "pattern_only")},
+            settings=self._settings,
+        )
+
         if not result.success or toc_result is None or not getattr(toc_result, "success", False):
             self.progress_card.set_error(getattr(toc_result, "error_message", None) or result.error_message or "오류 발생")
             QMessageBox.warning(self, "오류", f"목차 추출 실패:\n{getattr(toc_result, 'error_message', None) or result.error_message}")
@@ -183,8 +195,12 @@ class SmartTocPage(QWidget):
         h2 = len(toc_result.get_by_level(2))
         h3 = len(toc_result.get_by_level(3))
         mode = str(getattr(toc_result, "analysis_mode", "pattern_only"))
+        style_hint_total = int(getattr(toc_result, "style_hint_total", 0) or 0)
+        style_hint_matched = int(getattr(toc_result, "style_hint_matched", 0) or 0)
+        style_hint_missed = int(getattr(toc_result, "style_hint_missed", 0) or 0)
         self.stats_label.setText(
-            f"총 {toc_result.total_entries}개 항목 (H1: {h1}, H2: {h2}, H3: {h3}) | 분석모드: {mode}"
+            f"총 {toc_result.total_entries}개 항목 (H1: {h1}, H2: {h2}, H3: {h3}) | "
+            f"분석모드: {mode} | style hint: {style_hint_matched}/{style_hint_total} (missed {style_hint_missed})"
         )
 
         self.save_btn.setEnabled(True)
@@ -211,6 +227,7 @@ class SmartTocPage(QWidget):
         if file_path:
             fmt = "html" if file_path.endswith(".html") else "txt"
             if self._smart_toc.save_toc_as_file(self._last_result, file_path, fmt):
+                track_recent_files([file_path], settings=self._settings)
                 QMessageBox.information(self, "완료", f"목차가 저장되었습니다:\n{file_path}")
             else:
                 QMessageBox.warning(self, "오류", "목차 저장에 실패했습니다.")
@@ -228,6 +245,7 @@ class SmartTocPage(QWidget):
         
         if output_path:
             if self._smart_toc.generate_toc_hwp(self._file_path, output_path):
+                track_recent_files([output_path], settings=self._settings)
                 QMessageBox.information(
                     self,
                     "완료",

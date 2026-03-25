@@ -17,11 +17,13 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
 from ...core.table_doctor import TableDoctor, TableStyle
+from ...utils.history_manager import TaskType
 from ..widgets.file_list import FileListWidget
 from ..widgets.progress_card import ProgressCard
 from ..widgets.page_header import PageHeader
 from ...utils.worker import TableDoctorWorker, WorkerResult
 from ...utils.settings import get_settings_manager
+from ...utils.task_tracking import record_task_result
 
 
 class TableStyleCard(QFrame):
@@ -270,6 +272,15 @@ class TableDoctorPage(QWidget):
         if data.get("cancelled"):
             self.progress_card.set_error("작업이 취소되었습니다.")
             return
+
+        record_task_result(
+            TaskType.TABLE,
+            "표 수정",
+            self.file_list.get_files(),
+            result,
+            options={"style_name": getattr(self._selected_style, "name", "")},
+            settings=self._settings,
+        )
 
         if result.success:
             success = data.get("success_count", 0)

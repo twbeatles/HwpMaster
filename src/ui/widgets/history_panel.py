@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from datetime import datetime
 
-from ...utils.history_manager import get_history_manager, HistoryItem
+from ...utils.history_manager import HistoryItem, HistoryManager, get_history_manager
 
 
 class HistoryItemWidget(QFrame):
@@ -92,8 +92,14 @@ class HistoryItemWidget(QFrame):
 class HistoryPanel(QWidget):
     """히스토리 패널"""
     
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(
+        self,
+        parent: Optional[QWidget] = None,
+        *,
+        history_manager: Optional[HistoryManager] = None,
+    ) -> None:
         super().__init__(parent)
+        self._history_manager = history_manager or get_history_manager()
         self._setup_ui()
         self._load_history()
     
@@ -138,7 +144,7 @@ class HistoryPanel(QWidget):
         """히스토리 로드"""
         self.list_widget.clear()
         
-        history = get_history_manager().get_recent(20)
+        history = self._history_manager.get_recent(20)
         
         if not history:
             empty_label = QLabel("최근 작업 내역이 없습니다.")
@@ -161,7 +167,7 @@ class HistoryPanel(QWidget):
     
     def _on_clear(self) -> None:
         """히스토리 지우기"""
-        get_history_manager().clear()
+        self._history_manager.clear()
         self._load_history()
     
     def refresh(self) -> None:

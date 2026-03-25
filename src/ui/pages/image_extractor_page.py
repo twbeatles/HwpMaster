@@ -7,7 +7,9 @@ Author: HWP Master
 
 from typing import Optional
 import os
+from ...utils.history_manager import TaskType
 from ...utils.settings import get_settings_manager
+from ...utils.task_tracking import record_task_result
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QLineEdit, QGroupBox, QProgressBar,
@@ -169,6 +171,18 @@ class ImageExtractorPage(QWidget):
         self.progress.setVisible(False)
         self.extract_btn.setEnabled(True)
         self.open_folder_btn.setEnabled(True)
+
+        record_task_result(
+            TaskType.IMAGE_EXTRACT,
+            "이미지 추출",
+            self.file_list.get_files(),
+            result,
+            options={
+                "output_dir": self._output_dir,
+                "prefix": self.prefix_input.text().strip(),
+            },
+            settings=self._settings,
+        )
         
         if result.success:
             count = result.data.get("success_count", 0)
