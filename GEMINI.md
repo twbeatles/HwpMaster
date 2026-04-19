@@ -28,6 +28,7 @@
 - `pyrightconfig.json` - 정적 분석 범위와 Python 버전 기준
 - `.editorconfig` - 인코딩/줄바꿈/들여쓰기 기준
 - `PROJECT_AUDIT_PYHWPX.md` - 저장소 전반 감사와 기능 구현 후속 정리
+- `FUNCTIONAL_IMPLEMENTATION_AUDIT_2026-04-19.md` - 2026-04-19 기능 구현 감사 후속 반영 기록
 - `scripts/verify_core_modules.py` - 핵심 모듈 임포트 검증
 - `scripts/perf_smoke.py` - 수동 성능 스모크 테스트
 
@@ -83,6 +84,7 @@ pip install -r requirements.txt
 python main.py
 pyright .
 pytest -q
+HWPMASTER_REAL_DOC_TESTS=1 pytest -q tests/test_real_hwp_doc_diff_smart_toc.py tests/test_real_hwp_feature_smoke.py
 python scripts/verify_core_modules.py
 python scripts/perf_smoke.py
 ```
@@ -100,14 +102,22 @@ python scripts/perf_smoke.py
 
 ---
 
-## 🧪 현재 검증 기준 (2026-03-25)
+## 🧪 현재 검증 기준 (2026-04-19)
 
 - `pyright .` => `0 errors, 0 warnings`
-- `pytest -q` => `89 passed, 2 skipped`
+- `pytest -q` => `100 passed, 6 skipped`
+- `HWPMASTER_REAL_DOC_TESTS=1 pytest -q tests/test_real_hwp_doc_diff_smart_toc.py tests/test_real_hwp_feature_smoke.py` => 현재 런타임 `6 skipped`
 - 인코딩 정리 완료:
   - `src/utils/worker/__init__.py`
   - `src/core/hwp_handler/__init__.py`
 - 최신 정합성 반영:
+  - `CapabilityMapper` fallback을 복구해 pyhwpx 비가용 환경에서도 카테고리 커버리지를 유지
+  - repo-local `pyhwpx` stub(`typings/pyhwpx`)과 `pyrightconfig.json` 정리로 정적 분석 기준 복구
+  - `TemplateStoreError`를 도입해 템플릿 등록/추가/삭제/생성의 파일 I/O 실패를 UI-safe 하게 통일
+  - 링크 검사는 메모리 결과만 수집하고, HTML/XLSX 저장은 Export 시점으로 분리
+  - 취소 작업을 `cancelled` 상태로 히스토리에 기록하고 홈 대시보드에 상태 배지를 표시
+  - 설정 페이지에 환경 진단 워커/UI를 추가
+  - `hwp_master.spec`는 최신 기능 감사 문서를 조건부 번들링
   - `atomic_write.py`를 통해 settings/history/action-template/template-store/macro 저장을 원자적으로 처리
   - `task_tracking.py`로 최근 파일/작업 히스토리 갱신 로직을 통일
   - 홈 페이지에 최근 작업/즐겨찾기 패널을 추가하고 동일 config dir의 히스토리를 재사용
@@ -126,3 +136,4 @@ python scripts/perf_smoke.py
 - 전역 상태는 원칙적으로 지양하지만, 매크로 녹화는 `Action Console`과 `Macro Page` 간 세션 공유를 위해 예외적으로 공유 상태를 사용합니다.
 - 편집성 기능은 기본적으로 **원본 보존(새 파일 저장)** 정책을 따릅니다.
 - EXE 빌드는 `hwp_master.spec` 기준이며 결과물은 `dist/` 아래에 생성됩니다.
+- typing stub(`typings/pyhwpx`)은 개발용 정적 분석 자산이며 EXE 번들 대상은 아닙니다.

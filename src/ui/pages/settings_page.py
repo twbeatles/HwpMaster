@@ -9,13 +9,15 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QApplication, QMessageBox, QGroupBox,
-    QCheckBox, QLineEdit, QSpinBox, QScrollArea,
+    QCheckBox, QLineEdit, QSpinBox, QScrollArea, QTextEdit,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
+from ...utils.settings import get_settings_manager
 from ...utils.theme_manager import ThemeManager
 from ...utils.version import APP_NAME, APP_VERSION
+from ...utils.worker import EnvironmentDiagnosisWorker, WorkerResult
 from ..widgets.page_header import PageHeader
 
 
@@ -29,6 +31,8 @@ class SettingsPage(QWidget):
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self._settings = get_settings_manager()
+        self._diagnosis_worker: Optional[EnvironmentDiagnosisWorker] = None
 
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
@@ -172,6 +176,28 @@ class SettingsPage(QWidget):
         cleanup_row.addWidget(cleanup_desc, 1)
         system_layout.addLayout(cleanup_row)
 
+        diagnosis_row = QHBoxLayout()
+        diagnosis_label = QLabel("환경 진단")
+        diagnosis_label.setMinimumWidth(140)
+        diagnosis_row.addWidget(diagnosis_label)
+
+        self.diagnosis_btn = QPushButton("진단 실행")
+        self.diagnosis_btn.setProperty("class", "secondary")
+        self.diagnosis_btn.setMinimumWidth(100)
+        self.diagnosis_btn.clicked.connect(self._run_environment_diagnosis)
+        diagnosis_row.addWidget(self.diagnosis_btn)
+
+        self.diagnosis_summary_label = QLabel("아직 진단을 실행하지 않았습니다.")
+        self.diagnosis_summary_label.setStyleSheet("color: #8b949e; font-size: 12px;")
+        diagnosis_row.addWidget(self.diagnosis_summary_label, 1)
+        system_layout.addLayout(diagnosis_row)
+
+        self.diagnosis_detail = QTextEdit()
+        self.diagnosis_detail.setReadOnly(True)
+        self.diagnosis_detail.setPlaceholderText("환경 진단 결과가 여기에 표시됩니다.")
+        self.diagnosis_detail.setMinimumHeight(140)
+        system_layout.addWidget(self.diagnosis_detail)
+
         layout.addWidget(system_group)
 
         layout.addStretch()
@@ -236,3 +262,49 @@ class SettingsPage(QWidget):
                 )
         except Exception as e:
             QMessageBox.warning(self, "오류", f"프로세스 정리 중 오류가 발생했습니다:\n{e}")
+
+    def _run_environment_diagnosis(self) -> None:
+        if self._diagnosis_worker is not None and self._diagnosis_worker.isRunning():
+            return
+
+        output_dir = str(self._settings.get("default_output_dir", "") or "")
+        self.diagnosis_btn.setEnabled(False)
+        self.diagnosis_summary_label.setText("진단 실행 중...")
+        self.diagnosis_detail.setPlainText("환경 진단을 실행하고 있습니다.")
+
+        self._diagnosis_worker = EnvironmentDiagnosisWorker(output_dir)
+        self._diagnosis_worker.finished_with_result.connect(self._on_environment_diagnosis_finished)
+        self._diagnosis_worker.error_occurred.connect(self._on_environment_diagnosis_error)
+        self._diagnosis_worker.start()
+
+    def _on_environment_diagnosis_finished(self, result: WorkerResult) -> None:
+        self.diagnosis_btn.setEnabled(True)
+        self._diagnosis_worker = None
+
+        data = result.data if isinstance(result.data, dict) else {}
+        summary = str(data.get("summary", "진단 결과를 확인하세요."))
+        items = data.get("items", [])
+        if not isinstance(items, list):
+            items = []
+
+        self.diagnosis_summary_label.setText(summary)
+        lines: list[str] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            status = str(item.get("status", "WARN"))
+            name = str(item.get("name", "항목"))
+            detail = str(item.get("detail", ""))
+            lines.append(f"{status} | {name}")
+            if detail:
+                lines.append(detail)
+            lines.append("")
+        if not lines and result.error_message:
+            lines.append(result.error_message)
+        self.diagnosis_detail.setPlainText("\n".join(lines).strip())
+
+    def _on_environment_diagnosis_error(self, message: str) -> None:
+        if self._diagnosis_worker is None:
+            self.diagnosis_btn.setEnabled(True)
+        self.diagnosis_summary_label.setText("환경 진단 중 오류가 발생했습니다.")
+        self.diagnosis_detail.setPlainText(message)

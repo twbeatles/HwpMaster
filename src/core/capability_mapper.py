@@ -83,7 +83,10 @@ class CapabilityMapper:
         cap_methods = set(cap.methods)
         used_methods = sorted(m for m in used_methods_raw if m in cap_methods)
 
-        totals: dict[str, int] = {}
+        totals: dict[str, int] = {
+            str(category): max(0, int(count))
+            for category, count in (cap.categories or {}).items()
+        }
         used_by_cat: dict[str, int] = {}
         for name in cap.methods:
             cat = self._categorize(name)
@@ -92,10 +95,11 @@ class CapabilityMapper:
             cat = self._categorize(name)
             used_by_cat[cat] = used_by_cat.get(cat, 0) + 1
 
-        total_public = max(len(cap.methods), 1)
+        total_public_methods = int(cap.method_count or 0) or len(cap.methods) or sum(totals.values())
+        total_public = max(total_public_methods, 1)
         ratio = (len(used_methods) / total_public) * 100.0
         return CoverageResult(
-            total_public_methods=len(cap.methods),
+            total_public_methods=total_public_methods,
             used_public_methods=len(used_methods),
             usage_ratio_percent=ratio,
             used_methods=used_methods,
@@ -115,4 +119,3 @@ class CapabilityMapper:
             "category_totals": cov.category_totals,
             "category_used": cov.category_used,
         }
-

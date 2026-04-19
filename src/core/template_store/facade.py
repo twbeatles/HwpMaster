@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from .catalog import BUILTIN_TEMPLATES
-from .models import BuiltinTemplateSpec, TemplateCategory, TemplateInfo
+from .models import BuiltinTemplateSpec, TemplateCategory, TemplateInfo, TemplateStoreError
 from .repository import init_builtin_templates, init_directories, load_metadata, save_metadata
 from .service import (
     add_user_template,
@@ -35,6 +35,7 @@ class TemplateStore:
     """
 
     BUILTIN_TEMPLATES: list[BuiltinTemplateSpec] = BUILTIN_TEMPLATES
+    Error = TemplateStoreError
 
     def __init__(self, base_dir: Optional[str] = None) -> None:
         self._logger = logging.getLogger(__name__)

@@ -18,6 +18,10 @@ class TemplateCategory(Enum):
     OTHER = "기타"
 
 
+class TemplateStoreError(RuntimeError):
+    """템플릿 저장소 작업 실패."""
+
+
 @dataclass
 class TemplateInfo:
     """템플릿 정보"""

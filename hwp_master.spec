@@ -27,8 +27,11 @@ doc_files = [
     'CLAUDE.md',
     'GEMINI.md',
     'PROJECT_AUDIT_PYHWPX.md',
+    'FUNCTIONAL_IMPLEMENTATION_AUDIT_2026-04-19.md',
     'LICENSE',
 ]
+
+# typing stub은 정적 분석 전용이므로 번들 대상에 포함하지 않는다.
 
 for doc_name in doc_files:
     doc_path = ROOT / doc_name

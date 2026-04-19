@@ -39,6 +39,24 @@ class _FakeHyperlinkChecker:
 
 
 class TestHyperlinkWorkerReportSavePolicy(unittest.TestCase):
+    def test_empty_output_dir_skips_report_save_and_keeps_success(self) -> None:
+        with (
+            patch("src.utils.worker.com_context", return_value=nullcontext()),
+            patch("src.core.hyperlink_checker.HyperlinkChecker", _FakeHyperlinkChecker),
+        ):
+            worker = _CaptureHyperlinkWorker(
+                files=["a.hwp"],
+                output_dir="",
+            )
+            worker.run()
+
+        assert worker.captured is not None
+        self.assertTrue(worker.captured.success)
+        data = worker.captured.data or {}
+        self.assertEqual(data.get("success_count"), 1)
+        self.assertEqual(data.get("fail_count"), 0)
+        self.assertEqual(data.get("report_fail_count"), 0)
+
     def test_report_save_failure_counts_as_failure(self) -> None:
         with (
             patch("src.utils.worker.com_context", return_value=nullcontext()),

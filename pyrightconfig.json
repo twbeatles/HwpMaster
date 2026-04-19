@@ -1,6 +1,7 @@
 {
   "typeCheckingMode": "standard",
   "pythonVersion": "3.10",
+  "stubPath": "typings",
   "include": [
     "main.py",
     "src",
@@ -16,5 +17,6 @@
     "dist",
     "out"
   ],
-  "reportMissingTypeStubs": "none"
+  "reportMissingTypeStubs": "none",
+  "reportMissingModuleSource": "none"
 }

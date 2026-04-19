@@ -16,7 +16,7 @@
 - Python: **3.10+**
 - GUI: `PySide6>=6.6.0`
 - 정적 분석: `pyright .` 기준 **0 errors / 0 warnings**
-- 회귀 테스트: `pytest -q` 기준 **89 passed, 2 skipped**
+- 회귀 테스트: `pytest -q` 기준 **100 passed, 6 skipped**
 - 인코딩 규칙: `.editorconfig` 기준 `utf-8`, `lf`
 
 ---
@@ -29,6 +29,7 @@ HwpMaster/
 ├── pyrightconfig.json
 ├── LICENSE
 ├── PROJECT_AUDIT_PYHWPX.md
+├── FUNCTIONAL_IMPLEMENTATION_AUDIT_2026-04-19.md
 ├── main.py
 ├── hwp_master.spec
 ├── scripts/
@@ -95,6 +96,7 @@ pip install -r requirements.txt
 python main.py
 pyright .
 pytest -q
+HWPMASTER_REAL_DOC_TESTS=1 pytest -q tests/test_real_hwp_doc_diff_smart_toc.py tests/test_real_hwp_feature_smoke.py
 python scripts/verify_core_modules.py
 python scripts/perf_smoke.py
 ```
@@ -111,12 +113,20 @@ python scripts/perf_smoke.py
 
 ---
 
-## 📌 운영 정합성 메모 (2026-03-25)
+## 📌 운영 정합성 메모 (2026-04-19)
 
 - 최신 기준:
   - `pyright .` => `0 errors, 0 warnings`
-  - `pytest -q` => `89 passed, 2 skipped`
+  - `pytest -q` => `100 passed, 6 skipped`
+  - `HWPMASTER_REAL_DOC_TESTS=1 pytest -q tests/test_real_hwp_doc_diff_smart_toc.py tests/test_real_hwp_feature_smoke.py` => 현재 런타임에서는 `6 skipped`
 - 최근 반영:
+  - `hwp_master.spec`는 실제 존재하는 최신 감사 문서(`FUNCTIONAL_IMPLEMENTATION_AUDIT_2026-04-19.md`)를 조건부 번들링
+  - `CapabilityMapper` fallback 복구로 pyhwpx 비가용 환경에서도 카테고리 커버리지 유지
+  - repo-local `pyhwpx` stub(`typings/pyhwpx`)과 `pyrightconfig.json` 정리
+  - `TemplateStoreError` 추가로 템플릿 등록/추가/삭제/생성의 파일 I/O 실패를 UI-safe 하게 통일
+  - 링크 검사는 메모리 결과 수집만 수행하고, HTML/XLSX 저장은 Export 시점으로 분리
+  - 설정 페이지에 환경 진단 워커/UI 추가
+  - 취소 작업을 `cancelled` 상태로 히스토리에 기록하고 홈 대시보드에 상태 배지 표시
   - `atomic_write.py` 추가 후 settings/history/action-template/template-store/macro 저장 경로를 원자적 쓰기로 통일
   - `task_tracking.py` 추가 후 최근 파일/작업 히스토리 기록 로직을 공통화
   - 홈 페이지에 최근 작업/즐겨찾기 패널을 배치하고 메인 윈도우 설정 인스턴스와 연결

@@ -428,18 +428,21 @@ def on_inject_finished(window: Any, result: WorkerResult) -> None:
         QMessageBox.information(window, "취소", "데이터 주입 작업이 취소되었습니다.")
         return
 
+    filename_field_edit = getattr(window.data_inject_page, "filename_field_edit", None)
+    filename_template_edit = getattr(window.data_inject_page, "filename_template_edit", None)
+    filename_field = filename_field_edit.text().strip() if filename_field_edit is not None else ""
+    filename_template = (
+        filename_template_edit.text().strip() if filename_template_edit is not None else ""
+    )
+
     record_task_result(
         TaskType.DATA_INJECT,
         "데이터 주입",
         tracked_files,
         result,
         options={
-            "filename_field": getattr(window.data_inject_page, "filename_field_edit", None).text().strip()
-            if hasattr(window.data_inject_page, "filename_field_edit")
-            else "",
-            "filename_template": getattr(window.data_inject_page, "filename_template_edit", None).text().strip()
-            if hasattr(window.data_inject_page, "filename_template_edit")
-            else "",
+            "filename_field": filename_field,
+            "filename_template": filename_template,
         },
         settings=window._settings,
         history_manager=window._history,

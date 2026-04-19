@@ -7,7 +7,6 @@ Author: HWP Master
 
 from typing import Optional
 from pathlib import Path
-import tempfile
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -41,11 +40,10 @@ class HyperlinkPage(QWidget):
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self.temp_dir: str = ""
-        self._temp_dir_ctx: Optional[tempfile.TemporaryDirectory] = None
         self.worker = None
         self._settings = get_settings_manager()
         self._links: list[tuple[str, LinkInfo]] = []
+        self._last_worker_error: str = ""
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -107,6 +105,7 @@ class HyperlinkPage(QWidget):
 
         self.export_btn = QPushButton("리포트 저장")
         self.export_btn.clicked.connect(self._on_export)
+        self.export_btn.setEnabled(False)
         btn_layout.addWidget(self.export_btn)
 
         result_layout.addLayout(btn_layout)
@@ -141,7 +140,12 @@ class HyperlinkPage(QWidget):
                 self._settings.set("hyperlink_external_requests_enabled", False)
             self._settings.set("hyperlink_privacy_notice_shown", True)
 
+        self._last_worker_error = ""
+        self._links = []
         self.link_table.setRowCount(0)
+        self.total_label.setText("총 링크: 0개")
+        self.valid_label.setText("유효: 0개")
+        self.broken_label.setText("오류: 0개")
         self.progress.setVisible(True)
         self.progress.setValue(0)
         self.scan_btn.setEnabled(False)
@@ -149,15 +153,12 @@ class HyperlinkPage(QWidget):
 
         from ...utils.worker import HyperlinkWorker
 
-        self._cleanup_temp_dir()
-        self._temp_dir_ctx = tempfile.TemporaryDirectory()
-        self.temp_dir = self._temp_dir_ctx.name
         timeout_sec = int(self._settings.get("hyperlink_timeout_sec", 5))
         allowlist = str(self._settings.get("hyperlink_domain_allowlist", ""))
 
         self.worker = HyperlinkWorker(
             files,
-            self.temp_dir,
+            "",
             external_requests_enabled=external_enabled,
             timeout_sec=timeout_sec,
             domain_allowlist=allowlist,
@@ -210,8 +211,7 @@ class HyperlinkPage(QWidget):
     def _on_finished(self, result: WorkerResult) -> None:
         self.progress.setVisible(False)
         self.scan_btn.setEnabled(True)
-        self.export_btn.setEnabled(True)
-        self._cleanup_temp_dir()
+        self.export_btn.setEnabled(False)
 
         record_task_result(
             TaskType.HYPERLINK,
@@ -229,6 +229,7 @@ class HyperlinkPage(QWidget):
             data = result.data if isinstance(result.data, dict) else {}
             links = self._coerce_links(data.get("links", []))
             self._links = links
+            self.export_btn.setEnabled(bool(links))
 
             total = len(links)
             valid = sum(1 for _, link in links if link.status in (LinkStatus.VALID, LinkStatus.LOCAL_OK))
@@ -245,25 +246,18 @@ class HyperlinkPage(QWidget):
             self._populate_link_table(links)
             get_toast_manager().success("링크 검사 완료")
         else:
-            get_toast_manager().error(f"오류: {result.error_message}")
+            self._links = []
+            if result.error_message and result.error_message != self._last_worker_error:
+                get_toast_manager().error(f"오류: {result.error_message}")
+            self._last_worker_error = ""
 
     def _on_error(self, message: str) -> None:
-        self._cleanup_temp_dir()
+        self.progress.setVisible(False)
+        self.scan_btn.setEnabled(True)
+        self.export_btn.setEnabled(False)
+        self._links = []
+        self._last_worker_error = str(message)
         get_toast_manager().error(f"작업 중 오류 발생: {message}")
-
-    def _cleanup_temp_dir(self) -> None:
-        if self._temp_dir_ctx is not None:
-            try:
-                self._temp_dir_ctx.cleanup()
-            except Exception:
-                pass
-            finally:
-                self._temp_dir_ctx = None
-                self.temp_dir = ""
-
-    def closeEvent(self, event) -> None:
-        self._cleanup_temp_dir()
-        super().closeEvent(event)
 
     def _on_export(self) -> None:
         if self.link_table.rowCount() == 0:

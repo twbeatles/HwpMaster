@@ -16,6 +16,16 @@ from datetime import datetime
 from ...utils.history_manager import HistoryItem, HistoryManager, get_history_manager
 
 
+def _status_meta(status: str) -> tuple[str, str]:
+    mapping = {
+        "completed": ("완료", "#3fb950"),
+        "partial": ("부분", "#d29922"),
+        "failed": ("실패", "#f85149"),
+        "cancelled": ("취소", "#8b949e"),
+    }
+    return mapping.get(status, ("완료", "#3fb950"))
+
+
 class HistoryItemWidget(QFrame):
     """히스토리 항목 위젯"""
     
@@ -36,6 +46,16 @@ class HistoryItemWidget(QFrame):
         type_label = QLabel(item.task_type)
         type_label.setStyleSheet("font-weight: bold; color: #8957e5;")
         header_layout.addWidget(type_label)
+
+        status_text, status_color = _status_meta(item.status)
+        status_label = QLabel(status_text)
+        status_label.setStyleSheet(
+            "font-size: 11px; font-weight: bold; "
+            f"color: {status_color}; "
+            f"background: {status_color}22; "
+            "border-radius: 999px; padding: 2px 8px;"
+        )
+        header_layout.addWidget(status_label)
         
         header_layout.addStretch()
         

@@ -1,7 +1,7 @@
 # HWP Master pyhwpx 확장 프로젝트 감사 보고서
 
 작성일: 2026-02-25  
-최종 업데이트: 2026-03-25  
+최종 업데이트: 2026-04-19  
 기준 환경: Windows + 한글(HWP) 설치 환경, `pyhwpx 1.6.6`
 
 ## 1. 문서 목적
@@ -18,7 +18,7 @@
 | Core | `src/core/hwp_handler/`, `action_runner/`, `capability_mapper.py` | HWP 제어, 범용 액션 실행, pyhwpx 기능 매핑 |
 | UI | `src/ui/main_window/`, `src/ui/pages/*` | 기능별 페이지 lazy-loading, 대시보드/설정/고급 콘솔 |
 | Worker / Utils | `src/utils/worker/`, `output_paths.py`, `atomic_write.py`, `task_tracking.py` | 백그라운드 실행, 저장 정책, 원자적 저장, 최근 작업 추적 |
-| 품질 / 문서 | `tests/*`, `README.md`, `CLAUDE.md`, `GEMINI.md` | 회귀 테스트, 개발 가이드, 운영 메모 |
+| 품질 / 문서 | `tests/*`, `README.md`, `CLAUDE.md`, `GEMINI.md`, `FUNCTIONAL_IMPLEMENTATION_AUDIT_2026-04-19.md` | 회귀 테스트, 개발 가이드, 운영 메모 |
 
 ## 3. 감사 결과 반영 현황
 
@@ -56,6 +56,13 @@
   - 홈 대시보드에 최근 작업/즐겨찾기 패널을 추가하고 같은 config dir 기준 히스토리를 재사용
   - 템플릿 생성 시 출력 확장자를 원본 템플릿 suffix와 일치시키고, 필드 입력이 있는 경우 별도 입력 다이얼로그로 생성
   - Smart TOC HTML escape/page-number 표기와 style-hint 정렬 통계를 보강
+ - 2026-04-19 기능 구현 감사 후속 반영
+   - `CapabilityMapper` fallback 복구, repo-local `pyhwpx` stub, `pyrightconfig.json` 정리
+   - `TemplateStoreError` 도입과 템플릿 페이지 예외 처리 통일
+   - 하이퍼링크 스캔과 리포트 저장 분리, 취소 이력 상태 기록, 홈 대시보드 상태 배지 추가
+   - 설정 페이지 환경 진단 워커/UI 추가
+   - opt-in 실문서 smoke 테스트를 `convert/merge/split/metadata/watermark/header_footer/bookmark/hyperlink` 범위로 확장
+   - `hwp_master.spec`에 최신 기능 감사 문서를 조건부 번들링하도록 정리
 
 ### 남아 있는 운영상 주의점
 
@@ -84,7 +91,8 @@ PY
 ```
 
 - 정적 분석: `0 errors, 0 warnings`
-- 회귀 테스트: `89 passed, 2 skipped`
+- 회귀 테스트: `100 passed, 6 skipped`
+- opt-in 실문서 smoke: 현재 런타임 기준 `6 skipped`
 - 텍스트 무결성: `tests/test_repository_text_integrity.py` 통과
 
 ## 6. 권장 후속 조치

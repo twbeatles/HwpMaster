@@ -2,6 +2,7 @@ import unittest
 
 from src.core.hwp_handler import HwpHandler
 from src.core.capability_mapper import CapabilityMapper
+from src.core.hwp_handler.types import CapabilitySnapshot
 
 
 class TestHwpCapabilitySnapshot(unittest.TestCase):
@@ -29,7 +30,29 @@ class TestHwpCapabilitySnapshot(unittest.TestCase):
         self.assertIn("file_io", result.category_totals)
         self.assertIn("other", result.category_totals)
 
+    def test_capability_mapper_preserves_snapshot_categories_without_methods(self) -> None:
+        snapshot = CapabilitySnapshot(
+            pyhwpx_version="unavailable",
+            method_count=7,
+            methods=[],
+            action_count=0,
+            actions=[],
+            categories={
+                "file_io": 2,
+                "security_privacy": 1,
+                "other": 4,
+            },
+            unsupported_categories=[],
+        )
+
+        mapper = CapabilityMapper()
+        result = mapper.build_coverage(snapshot)
+
+        self.assertEqual(result.total_public_methods, 7)
+        self.assertEqual(result.used_public_methods, 0)
+        self.assertEqual(result.category_totals["file_io"], 2)
+        self.assertEqual(result.category_totals["other"], 4)
+
 
 if __name__ == "__main__":
     unittest.main()
-

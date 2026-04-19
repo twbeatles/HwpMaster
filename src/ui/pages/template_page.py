@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
-from ...core.template_store import TemplateStore, TemplateInfo
+from ...core.template_store import TemplateStore, TemplateInfo, TemplateStoreError
 from ..widgets.page_header import PageHeader
 from ...utils.history_manager import TaskType
 from ...utils.settings import get_settings_manager
@@ -408,85 +408,87 @@ class TemplatePage(QWidget):
         """템플릿 클릭"""
         template = self._store.get_template(template_id)
         if template:
-            # 내장 템플릿이지만 파일이 없으면 먼저 등록 플로우로 유도 (README 가이드와 정합)
-            if template.is_builtin and (not template.file_path or not Path(template.file_path).exists()):
-                QMessageBox.information(
+            try:
+                # 내장 템플릿이지만 파일이 없으면 먼저 등록 플로우로 유도 (README 가이드와 정합)
+                if template.is_builtin and (not template.file_path or not Path(template.file_path).exists()):
+                    QMessageBox.information(
+                        self,
+                        "파일 등록 필요",
+                        f"'{template.name}' 템플릿을 사용하려면 HWP 파일을 먼저 등록해야 합니다.",
+                    )
+                    hwp_path, _ = QFileDialog.getOpenFileName(
+                        self,
+                        "템플릿 파일 선택",
+                        self._settings.get("default_output_dir", str(Path.home() / "Documents")),
+                        "HWP 파일 (*.hwp *.hwpx)",
+                    )
+                    if not hwp_path:
+                        return
+
+                    ok = self._store.register_builtin_template_file(template_id, hwp_path)
+                    if not ok:
+                        QMessageBox.warning(self, "오류", "템플릿 파일 등록에 실패했습니다.")
+                        return
+
+                    self._load_templates()
+                    template = self._store.get_template(template_id)
+                    if template is None or not template.file_path:
+                        QMessageBox.warning(self, "오류", "템플릿 등록 후 정보를 불러오지 못했습니다.")
+                        return
+
+                file_path, _ = QFileDialog.getSaveFileName(
                     self,
-                    "파일 등록 필요",
-                    f"'{template.name}' 템플릿을 사용하려면 HWP 파일을 먼저 등록해야 합니다.",
+                    "저장 위치 선택",
+                    _template_output_path(
+                        template,
+                        self._settings.get("default_output_dir", str(Path.home() / "Documents")),
+                    ),
+                    _template_output_filter(template),
                 )
-                hwp_path, _ = QFileDialog.getOpenFileName(
-                    self,
-                    "템플릿 파일 선택",
-                    self._settings.get("default_output_dir", str(Path.home() / "Documents")),
-                    "HWP 파일 (*.hwp *.hwpx)",
-                )
-                if not hwp_path:
+                if not file_path:
                     return
 
-                ok = self._store.register_builtin_template_file(template_id, hwp_path)
-                if not ok:
-                    QMessageBox.warning(self, "오류", "템플릿 파일 등록에 실패했습니다.")
-                    return
+                creation_mode = "copy"
+                if template.fields:
+                    field_values = self._prompt_template_fields(template)
+                    if field_values is None:
+                        return
+                    creation_mode = "field_injection"
+                    result = self._store.create_from_template(template_id, field_values, file_path)
+                else:
+                    result = self._store.use_template(template_id, file_path)
 
-                self._load_templates()
-                template = self._store.get_template(template_id)
-                if template is None or not template.file_path:
-                    QMessageBox.warning(self, "오류", "템플릿 등록 후 정보를 불러오지 못했습니다.")
-                    return
-
-            # 출력 경로 선택
-            file_path, _ = QFileDialog.getSaveFileName(
-                self,
-                "저장 위치 선택",
-                _template_output_path(
-                    template,
-                    self._settings.get("default_output_dir", str(Path.home() / "Documents")),
-                ),
-                _template_output_filter(template),
-            )
-            
-            if file_path:
-                try:
-                    creation_mode = "copy"
-                    if template.fields:
-                        field_values = self._prompt_template_fields(template)
-                        if field_values is None:
-                            return
-                        creation_mode = "field_injection"
-                        result = self._store.create_from_template(template_id, field_values, file_path)
-                    else:
-                        result = self._store.use_template(template_id, file_path)
-
-                    if result:
-                        self.template_selected.emit(template_id, template.to_dict())
-                        record_task_summary(
-                            TaskType.TEMPLATE,
-                            f"템플릿 생성: {template.name}",
-                            [result],
-                            success_count=1,
-                            fail_count=0,
-                            options={
-                                "template_id": template.id,
-                                "template_name": template.name,
-                                "mode": creation_mode,
-                            },
-                            settings=self._settings,
-                            recent_files=[result],
-                        )
-                        QMessageBox.information(
-                            self,
-                            "완료",
-                            f"'{template.name}' 템플릿이 생성되었습니다.\n\n"
-                            f"저장 위치: {result}\n"
-                            f"필드: {', '.join(template.fields) if template.fields else '없음'}"
-                        )
-                    else:
-                        QMessageBox.warning(self, "오류", "템플릿 생성에 실패했습니다.")
-                except ValueError as e:
-                    QMessageBox.warning(self, "템플릿 오류", str(e))
-                except Exception as e:
-                    QMessageBox.warning(self, "오류", f"템플릿 생성 중 오류가 발생했습니다:\n{e}")
+                if result:
+                    self.template_selected.emit(template_id, template.to_dict())
+                    record_task_summary(
+                        TaskType.TEMPLATE,
+                        f"템플릿 생성: {template.name}",
+                        [result],
+                        success_count=1,
+                        fail_count=0,
+                        options={
+                            "template_id": template.id,
+                            "template_name": template.name,
+                            "mode": creation_mode,
+                        },
+                        settings=self._settings,
+                        recent_files=[result],
+                    )
+                    QMessageBox.information(
+                        self,
+                        "완료",
+                        f"'{template.name}' 템플릿이 생성되었습니다.\n\n"
+                        f"저장 위치: {result}\n"
+                        f"필드: {', '.join(template.fields) if template.fields else '없음'}"
+                    )
+                else:
+                    QMessageBox.warning(self, "오류", "템플릿 생성에 실패했습니다.")
+            except ValueError as e:
+                QMessageBox.warning(self, "템플릿 오류", str(e))
+            except TemplateStoreError as e:
+                QMessageBox.warning(self, "템플릿 저장소 오류", str(e))
+            except Exception as e:
+                QMessageBox.warning(self, "오류", f"템플릿 생성 중 오류가 발생했습니다:\n{e}")
     
     def _on_favorite_toggled(self, template_id: str) -> None:
         """즐겨찾기 토글"""
@@ -517,11 +519,14 @@ class TemplatePage(QWidget):
         )
         
         if reply == QMessageBox.StandardButton.Yes:
-            if self._store.remove_template(template_id):
-                self._load_templates()
-                QMessageBox.information(self, "완료", "템플릿이 삭제되었습니다.")
-            else:
-                QMessageBox.warning(self, "오류", "템플릿 삭제에 실패했습니다.")
+            try:
+                if self._store.remove_template(template_id):
+                    self._load_templates()
+                    QMessageBox.information(self, "완료", "템플릿이 삭제되었습니다.")
+                else:
+                    QMessageBox.warning(self, "오류", "템플릿 삭제에 실패했습니다.")
+            except TemplateStoreError as e:
+                QMessageBox.warning(self, "템플릿 저장소 오류", str(e))
     
     def _add_template(self) -> None:
         """사용자 템플릿 추가"""
@@ -533,12 +538,16 @@ class TemplatePage(QWidget):
                 QMessageBox.warning(self, "오류", "이름과 파일을 입력해주세요.")
                 return
             
-            self._store.add_user_template(
-                name=data["name"],
-                file_path=data["file_path"],
-                description=data["description"],
-                category=data["category"]
-            )
-            
+            try:
+                self._store.add_user_template(
+                    name=data["name"],
+                    file_path=data["file_path"],
+                    description=data["description"],
+                    category=data["category"]
+                )
+            except TemplateStoreError as e:
+                QMessageBox.warning(self, "템플릿 저장소 오류", str(e))
+                return
+
             self._load_templates()
             QMessageBox.information(self, "완료", "템플릿이 추가되었습니다.")

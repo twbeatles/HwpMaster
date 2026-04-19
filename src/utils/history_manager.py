@@ -38,6 +38,26 @@ class TaskType(Enum):
     ACTION_CONSOLE = "액션 콘솔"
 
 
+VALID_HISTORY_STATUSES = {"completed", "partial", "failed", "cancelled"}
+
+
+def infer_history_status(
+    *,
+    success_count: int,
+    fail_count: int,
+    cancelled: bool = False,
+) -> str:
+    """성공/실패 수와 취소 여부로 히스토리 상태를 계산한다."""
+
+    if cancelled:
+        return "cancelled"
+    if success_count > 0 and fail_count > 0:
+        return "partial"
+    if success_count == 0 and fail_count > 0:
+        return "failed"
+    return "completed"
+
+
 @dataclass
 class HistoryItem:
     """히스토리 항목"""
@@ -48,6 +68,7 @@ class HistoryItem:
     success_count: int
     fail_count: int
     timestamp: str
+    status: str = ""
     files: list[str] = field(default_factory=list)
     options: dict[str, Any] = field(default_factory=dict)
     
@@ -56,6 +77,11 @@ class HistoryItem:
             self.files = []
         if self.options is None:
             self.options = {}
+        self.status = self.status if self.status in VALID_HISTORY_STATUSES else infer_history_status(
+            success_count=int(self.success_count or 0),
+            fail_count=int(self.fail_count or 0),
+            cancelled=bool(self.options.get("cancelled", False)),
+        )
 
 
 class HistoryManager:
@@ -101,7 +127,8 @@ class HistoryManager:
         files: list[str],
         success_count: int,
         fail_count: int,
-        options: Optional[dict[str, Any]] = None
+        options: Optional[dict[str, Any]] = None,
+        status: str = "completed",
     ) -> HistoryItem:
         """히스토리 추가"""
         item = HistoryItem(
@@ -111,6 +138,7 @@ class HistoryManager:
             file_count=len(files),
             success_count=success_count,
             fail_count=fail_count,
+            status=status,
             timestamp=datetime.now().isoformat(),
             files=files[:10],  # 최대 10개 파일만 저장
             options=options or {}

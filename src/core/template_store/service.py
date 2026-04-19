@@ -5,7 +5,13 @@ from pathlib import Path
 from typing import Any, Optional
 from uuid import uuid4
 
-from .models import TemplateInfo
+from .models import TemplateInfo, TemplateStoreError
+
+
+def _raise_store_error(message: str, exc: Exception | None = None) -> None:
+    if exc is None:
+        raise TemplateStoreError(message)
+    raise TemplateStoreError(message) from exc
 
 
 def get_all_templates(store: Any) -> list[TemplateInfo]:
@@ -39,7 +45,10 @@ def add_user_template(
     template_id = f"user_{uuid4().hex}"
     source = Path(file_path)
     dest = store._user_templates_dir / f"{template_id}{source.suffix}"
-    shutil.copy2(source, dest)
+    try:
+        shutil.copy2(source, dest)
+    except OSError as exc:
+        _raise_store_error(f"사용자 템플릿 파일을 복사하지 못했습니다: {source}", exc)
 
     template = TemplateInfo(
         id=template_id,
@@ -63,7 +72,10 @@ def remove_template(store: Any, template_id: str) -> bool:
     if template.file_path:
         file_path = Path(template.file_path)
         if file_path.exists():
-            file_path.unlink()
+            try:
+                file_path.unlink()
+            except OSError as exc:
+                _raise_store_error(f"템플릿 파일을 삭제하지 못했습니다: {file_path}", exc)
 
     del store._templates[template_id]
     store._save_metadata()
@@ -119,11 +131,13 @@ def use_template(store: Any, template_id: str, output_path: str) -> Optional[str
 
     source = Path(template.file_path)
     if not source.exists():
-        store._logger.warning(f"템플릿 파일이 존재하지 않습니다: {template.file_path}")
-        return None
+        _raise_store_error(f"템플릿 파일이 존재하지 않습니다: {template.file_path}")
 
     dest = _resolve_output_path(template, output_path)
-    shutil.copy2(source, dest)
+    try:
+        shutil.copy2(source, dest)
+    except OSError as exc:
+        _raise_store_error(f"템플릿을 복사하지 못했습니다: {source}", exc)
     store.increment_usage(template_id)
     return str(dest)
 
@@ -149,8 +163,14 @@ def create_from_template(
             if result.success:
                 store.increment_usage(template_id)
                 return result.output_path
+            _raise_store_error(
+                getattr(result, "error_message", None) or "템플릿 생성에 실패했습니다."
+            )
     except Exception as e:
+        if isinstance(e, TemplateStoreError):
+            raise
         store._logger.warning(f"템플릿 생성 중 오류 발생: {e}")
+        _raise_store_error("템플릿 생성 중 오류가 발생했습니다.", e)
 
     return None
 
@@ -179,11 +199,13 @@ def register_builtin_template_file(store: Any, template_id: str, file_path: str)
 
     source = Path(file_path)
     if not source.exists():
-        store._logger.warning(f"파일이 존재하지 않습니다: {file_path}")
-        return False
+        _raise_store_error(f"등록할 템플릿 파일이 존재하지 않습니다: {file_path}")
 
     dest = store._templates_dir / f"{template_id}{source.suffix}"
-    shutil.copy2(source, dest)
+    try:
+        shutil.copy2(source, dest)
+    except OSError as exc:
+        _raise_store_error(f"내장 템플릿 파일을 등록하지 못했습니다: {source}", exc)
 
     template.file_path = str(dest)
     store._save_metadata()
