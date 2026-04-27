@@ -2,8 +2,8 @@
 
 ## 🎯 프로젝트 목적
 
-**HWP Master**는 pyhwpx 기반 경량 HWP 업무 자동화 도구입니다.
-공공기관/기업의 HWP 문서 작업을 자동화하면서도, 무거운 데이터 처리 스택 없이 Windows 데스크톱 환경에서 안정적으로 동작하는 것을 목표로 합니다.
+**HWP Master**는 pyhwpx 기반 자동화와 rhwp 기반 내장 편집기를 결합한 경량 HWP 업무 도구입니다.
+공공기관/기업의 HWP 문서 작업을 자동화하면서도, 무거운 데이터 처리 스택 없이 Windows 데스크톱 환경에서 안정적으로 동작하고, 기본 문서 편집 워크스페이스까지 제공하는 것을 목표로 합니다.
 
 ---
 
@@ -14,6 +14,7 @@
 | Runtime | Python 3.10+ | `pyrightconfig.json` 기준 |
 | GUI | PySide6 >= 6.6.0 | Qt 바인딩 |
 | HWP 제어 | pyhwpx >= 0.5.0 | 한글 COM 래퍼 |
+| 내장 편집기 | rhwp / QtWebEngine | `@rhwp/core 0.7.6` WASM self-host |
 | Excel | openpyxl >= 3.1.0 | Pandas 대체 |
 | 정적 분석 | Pyright / Pylance | `pyright .` clean 유지 |
 | 텍스트 규칙 | `.editorconfig` | UTF-8 / LF 고정 |
@@ -31,9 +32,12 @@
 - `FUNCTIONAL_IMPLEMENTATION_AUDIT_2026-04-19.md` - 2026-04-19 기능 구현 감사 후속 반영 기록
 - `scripts/verify_core_modules.py` - 핵심 모듈 임포트 검증
 - `scripts/perf_smoke.py` - 수동 성능 스모크 테스트
+- `assets/rhwp_studio/` - 내장 rhwp 편집기 정적 앱과 WASM 런타임
+- `vendor/rhwp/` - rhwp 0.7.6 기준 npm 산출물과 라이선스 메타데이터
 
 ### 코어 모듈 (`src/core/`)
 - `hwp_handler/` - HWP 파일 조작 파사드와 내부 도메인 모듈
+- `editor/` - rhwp 편집 세션, 저장 정책, localhost asset/API 서버
 - `action_runner/` - 범용 `run_action` / `execute_action` 실행 및 프리셋 패키지
 - `hyperlink_checker.py` - 링크 검사와 `LinkInfo` 결과 타입 정의
 - `template_store/`, `macro_recorder/` - 템플릿/매크로 저장소 패키지
@@ -67,6 +71,7 @@
 5. 로그, 오류 메시지, docstring은 UTF-8 한국어 기준으로 정리합니다.
 6. 설정/히스토리/매크로/템플릿 메타데이터 쓰기는 `atomic_write.py` 기반으로 유지합니다.
 7. 홈 대시보드에 노출되는 최근 파일/작업 이력 갱신은 `task_tracking.py`를 재사용합니다.
+8. 내장 편집기 저장은 `EditorSaveService`를 통해 백업/복구/HWPX 보호 정책을 적용합니다.
 
 ### 금지 사항
 1. ❌ Pandas/NumPy 추가
@@ -98,7 +103,24 @@ python scripts/perf_smoke.py
 3. `src/ui/pages/`에 대응 페이지를 추가합니다.
 4. `src/ui/pages/__init__.py` lazy export와 `src/ui/main_window/` 페이지 로딩을 갱신합니다.
 5. 워커가 필요하면 `src/utils/worker/` 패턴을 재사용합니다.
-6. `pyright .`와 `pytest -q`를 통과시킨 뒤 문서를 업데이트합니다.
+6. rhwp/QtWebEngine 편집기 기능이면 `assets/rhwp_studio/`, `vendor/rhwp/`, `hwp_master.spec` 정합성을 함께 확인합니다.
+7. `pyright .`와 `pytest -q`를 통과시킨 뒤 문서를 업데이트합니다.
+
+---
+
+## 🧪 현재 검증 기준 (2026-04-27)
+
+- `pyright .` => `0 errors, 0 warnings`
+- `pytest -q` => `106 passed, 6 skipped`
+- `python scripts/verify_core_modules.py` => 통과
+- `pyinstaller hwp_master.spec --noconfirm` => 통과
+- 당시 정합성 반영:
+  - `src/core/editor/`에 편집 세션/저장 서비스/localhost API 서버 추가
+  - `src/ui/pages/editor_page.py`와 `src/ui/main_window/` lazy-loading 경로에 문서 편집 페이지 추가
+  - `assets/rhwp_studio/`에 HWP Master용 rhwp bridge UI와 WASM 런타임 포함
+  - `vendor/rhwp/`에 upstream `v0.7.6` 기준과 MIT 라이선스 보관
+  - HWP 저장 백업, HWPX overwrite 보호, 복구본 저장 테스트 추가
+  - `.gitignore`에 rhwp vendor scratch/build artifact 제외 정책 추가
 
 ---
 
@@ -135,5 +157,6 @@ python scripts/perf_smoke.py
 
 - 전역 상태는 원칙적으로 지양하지만, 매크로 녹화는 `Action Console`과 `Macro Page` 간 세션 공유를 위해 예외적으로 공유 상태를 사용합니다.
 - 편집성 기능은 기본적으로 **원본 보존(새 파일 저장)** 정책을 따릅니다.
+- 내장 편집기의 `저장`은 현재 문서 경로에 쓰되 최초 덮어쓰기 전 백업을 생성하며, `복구본 저장`은 사용자 config dir의 recovery 경로에 기록합니다.
 - EXE 빌드는 `hwp_master.spec` 기준이며 결과물은 `dist/` 아래에 생성됩니다.
 - typing stub(`typings/pyhwpx`)은 개발용 정적 분석 자산이며 EXE 번들 대상은 아닙니다.

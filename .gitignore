@@ -82,6 +82,16 @@ temp/
 *.log
 *.tmp
 *.bak
+*.bak.*
+
+# Frontend/vendor scratch artifacts
+node_modules/
+*.tgz
+vendor/rhwp/source/
+vendor/rhwp/**/node_modules/
+vendor/rhwp/**/target/
+vendor/rhwp/**/dist/
+vendor/rhwp/**/.vite/
 
 # Misc
 .DS_Store

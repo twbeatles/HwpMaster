@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HWP Master Editor</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="document-meta">
+          <strong id="document-name">문서 편집기</strong>
+          <span id="document-state">초기화 중</span>
+        </div>
+        <div class="toolbar">
+          <button type="button" data-command="prev">이전</button>
+          <span id="page-indicator">0 / 0</span>
+          <button type="button" data-command="next">다음</button>
+          <span class="divider"></span>
+          <input id="insert-text" type="text" placeholder="삽입할 텍스트" />
+          <button type="button" data-command="insert">텍스트 삽입</button>
+          <span class="divider"></span>
+          <button type="button" data-command="save">저장</button>
+          <button type="button" data-command="save-as">다른 이름 저장</button>
+          <button type="button" data-command="recovery">복구본 저장</button>
+        </div>
+      </header>
+      <main class="workspace">
+        <aside class="sidebar">
+          <div class="panel-title">상태</div>
+          <dl>
+            <dt>형식</dt>
+            <dd id="format-value">-</dd>
+            <dt>페이지</dt>
+            <dd id="page-count-value">-</dd>
+            <dt>저장</dt>
+            <dd id="save-value">-</dd>
+          </dl>
+          <p class="note">
+            HWPX 직접 덮어쓰기는 보호 모드입니다. HWPX는 다른 이름 저장으로 검증본을 만들어주세요.
+          </p>
+        </aside>
+        <section class="page-host">
+          <div id="loading" class="loading">문서를 불러오는 중...</div>
+          <div id="viewer" class="viewer" aria-live="polite"></div>
+        </section>
+      </main>
+    </div>
+    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+    <script type="module" src="./hwp-master-bridge.js"></script>
+  </body>
+</html>

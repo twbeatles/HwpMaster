@@ -146,6 +146,8 @@ def on_page_changed(window: Any, index: int) -> None:
         return
     window._ensure_page_loaded(index)
     window.page_stack.setCurrentIndex(index)
+    if hasattr(window.sidebar, "set_checked_page"):
+        window.sidebar.set_checked_page(index)
     if index == 0:
         window.home_page.refresh_panels()
 
@@ -467,8 +469,6 @@ def on_inject_finished(window: Any, result: WorkerResult) -> None:
     else:
         window.data_inject_page.progress_card.set_error(result.error_message or "오류 발생")
         QMessageBox.warning(window, "오류", result.error_message or "데이터 주입 중 오류가 발생했습니다.")
-
-
 def on_clean_metadata(window: Any) -> None:
     files = window.metadata_page.file_list.get_files()
     if not files:

@@ -99,6 +99,7 @@ class MainWindow(QMainWindow):
         self.hyperlink_page = None
         self.image_extractor_page = None
         self.action_console_page = None
+        self.editor_page = None
 
         self._init_page_stack()
         self._sync_settings_page()

@@ -36,6 +36,7 @@ class TaskType(Enum):
     TEMPLATE = "템플릿 생성"
     MACRO = "매크로 실행"
     ACTION_CONSOLE = "액션 콘솔"
+    EDITOR = "문서 편집"
 
 
 VALID_HISTORY_STATUSES = {"completed", "partial", "failed", "cancelled"}

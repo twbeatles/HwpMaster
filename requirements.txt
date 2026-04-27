@@ -2,6 +2,7 @@
 # Lightweight stack - No Pandas/NumPy
 
 PySide6>=6.6.0
+# PySide6 wheels include QtWebEngine/QtWebChannel, used by the embedded rhwp editor.
 pyhwpx>=0.5.0
 openpyxl>=3.1.0
 pywin32>=306; platform_system=="Windows"

@@ -19,6 +19,8 @@ ROOT = Path(SPECPATH)
 # 데이터 파일
 datas = [
     (str(ROOT / 'assets'), 'assets'),
+    (str(ROOT / 'vendor' / 'rhwp' / 'README.md'), 'vendor/rhwp'),
+    (str(ROOT / 'vendor' / 'rhwp' / 'npm' / 'core' / 'LICENSE'), 'vendor/rhwp/npm/core'),
 ]
 
 # 실제 저장소에 존재하는 배포 문서만 번들에 포함한다.
@@ -43,6 +45,9 @@ hiddenimports = [
     'PySide6.QtCore',
     'PySide6.QtGui',
     'PySide6.QtWidgets',
+    'PySide6.QtWebChannel',
+    'PySide6.QtWebEngineCore',
+    'PySide6.QtWebEngineWidgets',
     'openpyxl',
     'pyhwpx',
     'win32com.client',
@@ -64,9 +69,11 @@ hiddenimports = [
     'src.ui.pages.hyperlink_page',
     'src.ui.pages.image_extractor_page',
     'src.ui.pages.action_console_page',
+    'src.ui.pages.editor_page',
     # Core extensions used by dynamic action console/capability mapping
     'src.core.action_runner',
     'src.core.capability_mapper',
+    'src.core.editor',
 ]
 
 # 제외할 모듈

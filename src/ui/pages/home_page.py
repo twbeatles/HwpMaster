@@ -29,6 +29,7 @@ class HomePage(QWidget):
     # 카테고리별 기능 목록 (이모지, 제목, 설명, 페이지 인덱스)
     SECTIONS: list[tuple[str, list[tuple[str, str, str, int]]]] = [
         ("기본", [
+            ("✍", "문서 편집", "HWP/HWPX 문서를 열고 편집·저장", 18),
             ("🔄", "스마트 변환", "HWP → PDF, TXT, HWPX, JPG 일괄 변환", 1),
             ("📎", "병합/분할", "여러 파일 병합 및 페이지별 분할", 2),
             ("📝", "데이터 주입", "Excel 데이터를 HWP 템플릿에 자동 입력", 3),

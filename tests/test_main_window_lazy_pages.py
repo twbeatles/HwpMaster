@@ -42,7 +42,9 @@ class TestMainWindowLazyPages(unittest.TestCase):
     def test_advanced_page_is_created_lazily(self) -> None:
         self.assertEqual(self.window.page_stack.count(), self.window._TOTAL_PAGE_COUNT)
         self.assertIsNone(self.window.hyperlink_page)
+        self.assertIsNone(self.window.editor_page)
         self.assertNotIn(15, self.window._lazy_loaded)
+        self.assertIn(18, self.window._LAZY_PAGE_SPECS)
 
         self.window._on_page_changed(15)
 

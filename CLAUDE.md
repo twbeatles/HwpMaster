@@ -2,12 +2,13 @@
 
 ## 📋 프로젝트 개요
 
-**HWP Master**는 pyhwpx 기반 경량 HWP 업무 자동화 도구입니다.
+**HWP Master**는 pyhwpx 기반 자동화와 rhwp 기반 내장 편집기를 함께 제공하는 경량 HWP 업무 도구입니다.
 
 ### 핵심 원칙
 - **경량화**: Pandas/NumPy 없이 `openpyxl` 중심으로 유지
 - **명시적 타입**: Pylance/Pyright에서 추론이 흔들리는 구간은 구체 타입으로 좁혀서 작성
 - **운영 안정성**: 기본 저장 정책은 원본 보존, 예외 메시지와 로그는 한국어 기준으로 일관성 유지
+- **편집기 분리**: 업무 자동화는 `pyhwpx`/한컴 COM 경로를 유지하고, 내장 편집기는 `rhwp` WebAssembly/QtWebEngine 경로로 분리
 
 ---
 
@@ -15,8 +16,9 @@
 
 - Python: **3.10+**
 - GUI: `PySide6>=6.6.0`
+- Embedded editor: `PySide6.QtWebEngineWidgets`, `PySide6.QtWebChannel`, `@rhwp/core 0.7.6`
 - 정적 분석: `pyright .` 기준 **0 errors / 0 warnings**
-- 회귀 테스트: `pytest -q` 기준 **100 passed, 6 skipped**
+- 회귀 테스트: `pytest -q` 기준 **106 passed, 6 skipped**
 - 인코딩 규칙: `.editorconfig` 기준 `utf-8`, `lf`
 
 ---
@@ -35,9 +37,12 @@ HwpMaster/
 ├── scripts/
 │   ├── verify_core_modules.py
 │   └── perf_smoke.py
-├── assets/styles/
-│   ├── style.template.qss
-│   └── style.qss
+├── assets/
+│   ├── rhwp_studio/
+│   └── styles/
+│       ├── style.template.qss
+│       └── style.qss
+├── vendor/rhwp/
 ├── src/
 │   ├── core/
 │   ├── ui/
@@ -71,9 +76,11 @@ HwpMaster/
 - 출력 경로 정책은 `src/utils/output_paths.py`로 통일합니다.
 - 파일명 정리는 `src/utils/filename_sanitizer.py`를 우선 사용합니다.
 - 설정/히스토리/템플릿/매크로 메타데이터 저장은 `src/utils/atomic_write.py` 헬퍼를 우선 사용합니다.
+- 바이너리 문서 저장은 `atomic_write_bytes()`를 사용하고, 편집기 백업/복구 파일은 사용자 config dir 아래에 둡니다.
 
 ### UI / 워커
 - 새 기능은 `src/core/`와 `src/ui/pages/`를 함께 추가하고, 메인 윈도우 lazy-loading 경로까지 연결합니다.
+- rhwp 편집기 기능은 `src/core/editor/`, `assets/rhwp_studio/`, `vendor/rhwp/`의 책임을 분리합니다.
 - 백그라운드 작업은 `src/utils/worker/` 패턴을 따르고, 성공/실패 판정은 결과 집계와 동일한 기준으로 맞춥니다.
 - 작업 완료 후 최근 파일과 홈 대시보드 히스토리 갱신은 `src/utils/task_tracking.py` 헬퍼로 통일합니다.
 
@@ -109,7 +116,25 @@ python scripts/perf_smoke.py
 - [ ] `pyright .`가 깨지지 않는다.
 - [ ] `pytest -q`가 기존 기준을 유지한다.
 - [ ] 새 페이지/모듈이면 `__init__.py`와 `src/ui/main_window/` 연결을 반영했다.
+- [ ] QtWebEngine/rhwp asset을 건드렸으면 `hwp_master.spec`, `.gitignore`, README/운영 문서를 함께 확인했다.
 - [ ] 로그/오류 메시지/주석의 한국어 표현을 통일했다.
+
+---
+
+## 📌 운영 정합성 메모 (2026-04-27)
+
+- 당시 기준:
+  - `pyright .` => `0 errors, 0 warnings`
+  - `pytest -q` => `106 passed, 6 skipped`
+- 최근 반영:
+  - rhwp `0.7.6` npm 산출물을 `vendor/rhwp/`에 보관하고, 실행용 WASM/JS를 `assets/rhwp_studio/rhwp-core/`로 번들링
+  - `EditorSession`, `EditorSaveService`, `EditorAssetServer`를 추가해 세션 상태, 저장/백업/복구, localhost token API를 분리
+  - `EditorPage`를 lazy page로 추가하고 사이드바/홈에서 `문서 편집` 진입점을 제공
+  - HWP 현재 저장은 최초 덮어쓰기 전 백업을 생성하며, HWPX 직접 덮어쓰기는 보호 모드로 제한
+  - `hwp_master.spec`에 QtWebEngine/QtWebChannel hidden import와 rhwp license asset을 포함
+- 저장 정책 예외:
+  - 기존 자동화 기능은 원본 보존 기본값을 유지합니다.
+  - 편집기 `Ctrl+S`/`저장`은 사용자가 연 문서의 현재 경로 저장을 수행하되, 첫 저장 전 백업을 생성합니다.
 
 ---
 

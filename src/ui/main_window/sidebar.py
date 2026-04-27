@@ -23,11 +23,11 @@ class Sidebar(QFrame):
     page_changed = Signal(int)
 
     NAV_SECTIONS = [
-        ("기본", [("🏠", "홈"), ("🔄", "변환"), ("🔗", "병합/분할"), ("🧩", "데이터 주입"), ("🧹", "메타정보 정리")]),
-        ("고급", [("📁", "템플릿 스토어"), ("🎬", "매크로"), ("🧪", "정규식 치환")]),
-        ("분석", [("🕵", "서식 교정"), ("📊", "표 교정"), ("📄", "문서 비교"), ("📚", "스마트 목차")]),
-        ("생산성", [("💧", "워터마크"), ("📑", "헤더/푸터"), ("🔖", "북마크"), ("🔍", "링크 검사"), ("🖼", "이미지 추출"), ("🧰", "액션 콘솔")]),
-        ("", [("⚙", "설정")]),
+        ("기본", [("🏠", "홈", 0), ("✍", "문서 편집", 18), ("🔄", "변환", 1), ("🔗", "병합/분할", 2), ("🧩", "데이터 주입", 3), ("🧹", "메타정보 정리", 4)]),
+        ("고급", [("📁", "템플릿 스토어", 5), ("🎬", "매크로", 6), ("🧪", "정규식 치환", 7)]),
+        ("분석", [("🕵", "서식 교정", 8), ("📊", "표 교정", 9), ("📄", "문서 비교", 10), ("📚", "스마트 목차", 11)]),
+        ("생산성", [("💧", "워터마크", 12), ("📑", "헤더/푸터", 13), ("🔖", "북마크", 14), ("🔍", "링크 검사", 15), ("🖼", "이미지 추출", 16), ("🧰", "액션 콘솔", 17)]),
+        ("", [("⚙", "설정", 19)]),
     ]
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -37,7 +37,7 @@ class Sidebar(QFrame):
 
         self._is_collapsed = False
         self._buttons: list[SidebarButton] = []
-        self._nav_items: list[tuple[str, str]] = []
+        self._nav_items: list[tuple[str, str, int]] = []
         self._section_labels: list[QLabel] = []
 
         main_layout = QVBoxLayout(self)
@@ -125,8 +125,8 @@ class Sidebar(QFrame):
                 self._section_labels.append(section_label)
                 self._scroll_layout.addWidget(section_label)
 
-            for icon, text in items:
-                self._nav_items.append((icon, text))
+            for icon, text, page_index in items:
+                self._nav_items.append((icon, text, page_index))
                 btn = SidebarButton(f"  {icon}  {text}")
                 btn.clicked.connect(lambda checked, i=btn_index: self._on_button_clicked(i))
                 self._buttons.append(btn)
@@ -170,9 +170,20 @@ class Sidebar(QFrame):
         main_layout.addWidget(footer_widget)
 
     def _on_button_clicked(self, index: int) -> None:
+        if not (0 <= index < len(self._nav_items)):
+            return
+        self._set_checked_button(index)
+        self.page_changed.emit(self._nav_items[index][2])
+
+    def _set_checked_button(self, index: int) -> None:
         for i, btn in enumerate(self._buttons):
             btn.setChecked(i == index)
-        self.page_changed.emit(index)
+
+    def set_checked_page(self, page_index: int) -> None:
+        for idx, (_, _, target_page) in enumerate(self._nav_items):
+            if target_page == page_index:
+                self._set_checked_button(idx)
+                return
 
     @property
     def is_collapsed(self) -> bool:
@@ -224,7 +235,7 @@ class Sidebar(QFrame):
         for label in self._section_labels:
             label.setVisible(not self._is_collapsed)
 
-        for btn, (icon, text) in zip(self._buttons, self._nav_items):
+        for btn, (icon, text, _page_index) in zip(self._buttons, self._nav_items):
             if self._is_collapsed:
                 btn.setText(f"  {icon}")
                 btn.setToolTip(text)

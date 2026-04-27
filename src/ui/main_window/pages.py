@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 from ...utils.task_tracking import track_recent_files
 
 
-TOTAL_PAGE_COUNT = 19
+TOTAL_PAGE_COUNT = 20
 LAZY_PAGE_SPECS: dict[int, tuple[str, str, str]] = {
     5: (".pages.template_page", "TemplatePage", "template_page"),
     6: (".pages.macro_page", "MacroPage", "macro_page"),
@@ -23,6 +23,7 @@ LAZY_PAGE_SPECS: dict[int, tuple[str, str, str]] = {
     15: (".pages.hyperlink_page", "HyperlinkPage", "hyperlink_page"),
     16: (".pages.image_extractor_page", "ImageExtractorPage", "image_extractor_page"),
     17: (".pages.action_console_page", "ActionConsolePage", "action_console_page"),
+    18: (".pages.editor_page", "EditorPage", "editor_page"),
 }
 
 
@@ -45,7 +46,7 @@ def create_eager_page(window: Any, index: int) -> QWidget:
         2: window.merge_split_page,
         3: window.data_inject_page,
         4: window.metadata_page,
-        18: window.settings_page,
+        19: window.settings_page,
     }
     page = page_map.get(index)
     if page is None:
@@ -87,4 +88,17 @@ def bind_lazy_page_signals(window: Any, index: int, page: QWidget) -> None:
     file_list = getattr(page, "file_list", None)
     if file_list is not None and hasattr(file_list, "files_changed"):
         file_list.files_changed.connect(lambda files, _window=window: track_recent_files(files, settings=_window._settings))
+    send_signal = getattr(page, "send_to_convert_requested", None)
+    if index == 18 and send_signal is not None:
+        send_signal.connect(
+            lambda path, _window=window: _send_editor_document_to_convert(_window, path)
+        )
     window._lazy_signal_bound.add(index)
+
+
+def _send_editor_document_to_convert(window: Any, path: str) -> None:
+    if not path:
+        return
+    window.convert_page.file_list.add_file(path)
+    window.sidebar.set_checked_page(1)
+    window._on_page_changed(1)
